@@ -1,0 +1,9 @@
+{
+  "name": "@ok.lol/skill",
+  "private": true,
+  "type": "module",
+  "module": "index.ts",
+  "dependencies": {
+    "zod": "catalog:"
+  }
+}

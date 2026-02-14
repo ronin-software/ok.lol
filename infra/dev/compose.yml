@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: transfers
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle
+    ports:
+      - "3000:3000"
+    entrypoint: /entrypoint.sh
+    # io_uring requires relaxed seccomp + IPC_LOCK for mlock.
+    security_opt:
+      - seccomp=unconfined
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - tbdata:/data
+      - ./tigerbeetle-entrypoint.sh:/entrypoint.sh:ro
+
+volumes:
+  pgdata:
+  tbdata:

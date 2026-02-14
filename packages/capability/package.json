@@ -1,0 +1,9 @@
+{
+  "name": "@ok.lol/capability",
+  "private": true,
+  "type": "module",
+  "module": "index.ts",
+  "dependencies": {
+    "@ok.lol/jsonschema": "workspace:*"
+  }
+}

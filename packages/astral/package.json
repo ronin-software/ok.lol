@@ -1,0 +1,6 @@
+{
+  "name": "@ok.lol/astral",
+  "private": true,
+  "type": "module",
+  "module": "index.ts"
+}

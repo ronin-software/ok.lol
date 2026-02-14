@@ -1,0 +1,11 @@
+{
+  "name": "@ok.lol/worker",
+  "private": true,
+  "type": "module",
+  "module": "index.ts",
+  "dependencies": {
+    "@ok.lol/capability": "workspace:*",
+    "@ok.lol/jsonschema": "workspace:*",
+    "zod": "catalog:"
+  }
+}
