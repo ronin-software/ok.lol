@@ -2,8 +2,5 @@
   "name": "@ok.lol/jsonschema",
   "private": true,
   "type": "module",
-  "module": "index.ts",
-  "dependencies": {
-    "zod": "catalog:"
-  }
+  "module": "index.ts"
 }

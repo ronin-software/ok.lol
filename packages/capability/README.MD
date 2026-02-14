@@ -3,6 +3,7 @@
 A capability is a callable function backed by some resource (an application binary, an API, etc).
 
 Capabilities can be called remotely across resources belonging to the same user, and may be located on:
+- Origins
 - Principals
 - Workers
 

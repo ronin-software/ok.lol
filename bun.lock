@@ -15,11 +15,18 @@
       "name": "@ok.lol/capability",
       "dependencies": {
         "@ok.lol/jsonschema": "workspace:*",
+        "zod": "catalog:",
       },
     },
     "packages/jsonschema": {
       "name": "@ok.lol/jsonschema",
+    },
+    "packages/origin": {
+      "name": "@ok.lol/origin",
       "dependencies": {
+        "@ok.lol/capability": "workspace:*",
+        "@ok.lol/jsonschema": "workspace:*",
+        "ai": "catalog:",
         "zod": "catalog:",
       },
     },
@@ -63,6 +70,8 @@
     "@ok.lol/capability": ["@ok.lol/capability@workspace:packages/capability"],
 
     "@ok.lol/jsonschema": ["@ok.lol/jsonschema@workspace:packages/jsonschema"],
+
+    "@ok.lol/origin": ["@ok.lol/origin@workspace:packages/origin"],
 
     "@ok.lol/principal": ["@ok.lol/principal@workspace:packages/principal"],
 

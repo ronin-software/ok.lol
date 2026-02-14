@@ -1,5 +1,4 @@
-import type { Capability } from "@ok.lol/capability";
-import { fromZod } from "@ok.lol/jsonschema";
+import { type Capability, zodToJsonSchema } from "@ok.lol/capability";
 import { z } from "zod";
 
 export default {
@@ -17,6 +16,6 @@ export default {
   async setup() {
   },
 
-  inputSchema: fromZod(z.any()),
-  outputSchema: fromZod(z.any()),
+  inputSchema: zodToJsonSchema(z.any()),
+  outputSchema: zodToJsonSchema(z.any()),
 } satisfies Capability<any, any>; 

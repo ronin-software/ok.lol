@@ -1,4 +1,5 @@
 import type { JSONSchema7 } from "@ok.lol/jsonschema";
+import type { z } from "zod";
 
 /**
  * A capability is a callable function backed by some resource (an application binary, an API, etc).
@@ -33,4 +34,9 @@ export interface Capability<TInput, TOutput> {
   inputSchema: JSONSchema7;
   /** JSON Schema for the output of `call` */
   outputSchema: JSONSchema7;
+}
+
+/** Convert a Zod schema to JSONSchema7, targeting draft-07 */
+export function zodToJsonSchema(schema: z.ZodType): JSONSchema7 {
+  return schema.toJSONSchema({ target: "draft-07" }) as JSONSchema7;
 }

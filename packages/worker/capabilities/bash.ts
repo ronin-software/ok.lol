@@ -1,5 +1,4 @@
-import type { Capability } from "@ok.lol/capability";
-import { fromZod } from "@ok.lol/jsonschema";
+import { type Capability, zodToJsonSchema } from "@ok.lol/capability";
 import z from "zod";
 
 /** Args for calling the bash capability */
@@ -33,7 +32,7 @@ const outputSchema = z.object({
 });
 
 /** Runs bash commands on the host */
-export const bash: Capability<CallArgs, CallResult> = {
+export const bash = {
   /** Returns whether bash is available */
   available: async () => Bun.which("bash") !== null,
   /** Runs a bash command */
@@ -55,6 +54,6 @@ export const bash: Capability<CallArgs, CallResult> = {
   description: "Runs bash commands on the host",
   name: "bash",
 
-  inputSchema: fromZod(inputSchema),
-  outputSchema: fromZod(outputSchema),
-};
+  inputSchema: zodToJsonSchema(inputSchema),
+  outputSchema: zodToJsonSchema(outputSchema),
+} satisfies Capability<CallArgs, CallResult>;

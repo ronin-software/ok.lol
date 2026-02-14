@@ -1,10 +1,3 @@
-import type { z } from "zod";
-
-/** Convert a Zod schema to JSONSchema7, targeting draft-07 */
-export function fromZod(schema: z.ZodType): JSONSchema7 {
-  return schema.toJSONSchema({ target: "draft-07" }) as JSONSchema7;
-}
-
 // ==================================================================================================
 // JSON Schema Draft 07
 // ==================================================================================================

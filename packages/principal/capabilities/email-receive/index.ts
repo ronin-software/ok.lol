@@ -1,5 +1,4 @@
-import type { Capability } from "@ok.lol/capability";
-import { fromZod } from "@ok.lol/jsonschema";
+import { type Capability, zodToJsonSchema } from "@ok.lol/capability";
 import { z } from "zod";
 
 export default {
@@ -22,6 +21,6 @@ export default {
     // NOTE: Origin will need to implement a hook to handle received emails, replaying them to the correct server for the Principal if received by wrong host
   },
 
-  inputSchema: fromZod(z.any()),
-  outputSchema: fromZod(z.any()),
+  inputSchema: zodToJsonSchema(z.any()),
+  outputSchema: zodToJsonSchema(z.any()),
 } satisfies Capability<any, any>; 
