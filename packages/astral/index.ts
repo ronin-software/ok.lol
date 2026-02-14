@@ -1,44 +1,44 @@
-export { accept } from "./accept";
-export type { AcceptOptions, Peer } from "./accept";
 export { connect } from "./connect";
-export type { ConnectedPeer, ConnectOptions } from "./connect";
+export type { ConnectOptions, Remote } from "./connect";
 export { handle } from "./handle";
 export type { Callable } from "./handle";
+export { serve } from "./serve";
+export type { ServeOptions } from "./serve";
 
 // –
-// Wire format
+// Wire format (internal to serve, exposed for standalone handle usage)
 // –
 
-/** RPC invocation sent to the remote peer */
+/** RPC invocation */
 export interface Call {
-  type: "call";
   /** Target capability name */
   capability: string;
   /** Correlation ID */
   id: string;
   /** JSON-serializable input */
   input: unknown;
+  type: "call";
 }
 
-/** Intermediate streaming value for a call */
+/** Intermediate streaming value */
 export interface Yield {
-  type: "yield";
   /** Correlation ID */
   id: string;
   /** JSON-serializable output chunk */
   output: unknown;
+  type: "yield";
 }
 
-/** Terminal result sent back to the caller */
+/** Terminal result */
 export interface Result {
-  type: "result";
   /** Error message on failure */
   error?: string;
   /** Correlation ID */
   id: string;
   /** JSON-serializable output on success */
   output?: unknown;
+  type: "result";
 }
 
-/** A WebSocket frame */
-export type Message = Call | Yield | Result;
+/** A wire frame */
+export type Message = Call | Result | Yield;

@@ -1,62 +1,49 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { connect } from "./connect";
-import { accept } from "./accept";
-import type { Peer } from "./accept";
+import { serve } from "./serve";
 
 const echo = {
   call: async (input: unknown) => input,
 };
 
-const double = {
-  call: async (input: unknown) => {
-    const n = (input as { n: number }).n;
-    return { result: n * 2 };
+const counter = {
+  call: async () =>
+    (async function* () {
+      yield 1;
+      yield 2;
+      yield 3;
+    })(),
+};
+
+const boom = {
+  call: async () => {
+    throw new Error("kaboom");
   },
 };
 
-/** Spin up a Bun WebSocket server wired to accept() */
-function serve(capabilities: Record<string, { call: (input: unknown) => Promise<unknown> }>) {
-  const peers: Peer[] = [];
+/** Spin up a Bun HTTP server wired to serve() */
+function start(
+  capabilities: Record<string, { call: (input: unknown) => Promise<unknown> }>,
+) {
+  const handler = serve({
+    capabilities,
+    verify: (jwt) => jwt === "valid",
+  });
 
   const server = Bun.serve({
     port: 0,
-    fetch(req, server) {
-      const url = new URL(req.url);
-      const token = url.searchParams.get("token");
-      if (token !== "valid") return new Response("Unauthorized", { status: 401 });
-      server.upgrade(req);
-      return undefined;
-    },
-    websocket: {
-      open(ws) {
-        const peer = accept({
-          capabilities,
-          send: (data) => ws.send(data),
-        });
-        peers.push(peer);
-        (ws as unknown as { peer: Peer }).peer = peer;
-      },
-      message(ws, msg) {
-        (ws as unknown as { peer: Peer }).peer.receive(
-          typeof msg === "string" ? msg : new TextDecoder().decode(msg),
-        );
-      },
-      close(ws) {
-        (ws as unknown as { peer: Peer }).peer.close();
-      },
+    routes: {
+      "/astral/*": { POST: handler },
     },
   });
 
   return {
-    close: () => {
-      peers.forEach((p) => p.close());
-      server.stop(true);
-    },
-    url: `ws://localhost:${server.port}`,
+    close: () => server.stop(true),
+    url: `http://localhost:${server.port}/astral`,
   };
 }
 
-describe("connect", () => {
+describe("connect + serve", () => {
   let cleanup: (() => void) | undefined;
 
   afterEach(() => {
@@ -64,109 +51,88 @@ describe("connect", () => {
     cleanup = undefined;
   });
 
-  test("establishes connection and calls remote capability", async () => {
-    const server = serve({ echo });
+  test("calls a remote capability", async () => {
+    const server = start({ echo });
     cleanup = server.close;
 
-    const peer = await connect({
-      capabilities: {},
-      jwt: "valid",
-      url: server.url,
-    });
-
-    const result = await peer.call("echo", { hello: "world" });
+    const remote = connect({ url: server.url, jwt: "valid" });
+    const result = await remote.call("echo", { hello: "world" });
     expect(result).toEqual({ hello: "world" });
-    peer.close();
   });
 
   test("rejects on invalid JWT", async () => {
-    const server = serve({ echo });
+    const server = start({ echo });
     cleanup = server.close;
 
-    expect(
-      connect({
-        capabilities: {},
-        jwt: "bad",
-        url: server.url,
-      }),
-    ).rejects.toThrow();
+    const remote = connect({ url: server.url, jwt: "bad" });
+    expect(remote.call("echo", {})).rejects.toThrow();
   });
 
-  test("rejects on empty JWT", async () => {
-    const server = serve({ echo });
+  test("rejects on missing JWT", async () => {
+    const server = start({ echo });
     cleanup = server.close;
 
-    expect(
-      connect({
-        capabilities: {},
-        jwt: "",
-        url: server.url,
-      }),
-    ).rejects.toThrow();
+    const remote = connect({ url: server.url, jwt: "" });
+    expect(remote.call("echo", {})).rejects.toThrow();
   });
 
-  test("unregistered capability returns error over live connection", async () => {
-    const server = serve({ echo });
+  test("throws for unknown capability", async () => {
+    const server = start({ echo });
     cleanup = server.close;
 
-    const peer = await connect({
-      capabilities: {},
-      jwt: "valid",
-      url: server.url,
-    });
-
-    expect(peer.call("bash", { command: "rm -rf /" })).rejects.toThrow("unknown capability");
-    peer.close();
+    const remote = connect({ url: server.url, jwt: "valid" });
+    expect(remote.call("missing", {})).rejects.toThrow();
   });
 
-  test("bidirectional RPC: origin calls worker capability", async () => {
-    // Server has echo, will call worker's double
-    const peers: Peer[] = [];
-    const server = Bun.serve({
-      port: 0,
-      fetch(req, server) {
-        server.upgrade(req);
-        return undefined;
-      },
-      websocket: {
-        open(ws) {
-          const peer = accept({
-            capabilities: {},
-            send: (data) => ws.send(data),
-          });
-          peers.push(peer);
-          (ws as unknown as { peer: Peer }).peer = peer;
-        },
-        message(ws, msg) {
-          (ws as unknown as { peer: Peer }).peer.receive(
-            typeof msg === "string" ? msg : new TextDecoder().decode(msg),
-          );
-        },
-        close(ws) {
-          (ws as unknown as { peer: Peer }).peer.close();
-        },
-      },
-    });
+  test("returns error message from capability", async () => {
+    const server = start({ boom });
+    cleanup = server.close;
 
-    cleanup = () => {
-      peers.forEach((p) => p.close());
-      server.stop(true);
+    const remote = connect({ url: server.url, jwt: "valid" });
+    expect(remote.call("boom", {})).rejects.toThrow("kaboom");
+  });
+
+  // –
+  // Streaming
+  // –
+
+  test("streams async iterable via SSE", async () => {
+    const server = start({ counter });
+    cleanup = server.close;
+
+    const remote = connect({ url: server.url, jwt: "valid" });
+    const stream = (await remote.call("counter", {})) as AsyncIterable<number>;
+
+    const chunks: number[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    expect(chunks).toEqual([1, 2, 3]);
+  });
+
+  test("streaming error throws on client", async () => {
+    const failing = {
+      call: async () =>
+        (async function* () {
+          yield "ok";
+          throw new Error("mid-stream");
+        })(),
     };
 
-    // Worker connects, exposing "double"
-    const workerPeer = await connect({
-      capabilities: { double },
-      jwt: "any",
-      url: `ws://localhost:${server.port}`,
-    });
+    const server = start({ failing });
+    cleanup = server.close;
 
-    // Wait for server peer to be created
-    await new Promise((r) => setTimeout(r, 50));
+    const remote = connect({ url: server.url, jwt: "valid" });
+    const stream = (await remote.call(
+      "failing",
+      {},
+    )) as AsyncIterable<string>;
 
-    // Origin calls "double" on the worker
-    const result = await peers[0]?.call("double", { n: 21 });
-    expect(result).toEqual({ result: 42 });
-
-    workerPeer.close();
+    const chunks: string[] = [];
+    try {
+      for await (const chunk of stream) chunks.push(chunk);
+      expect.unreachable("should have thrown");
+    } catch (e) {
+      expect(chunks).toEqual(["ok"]);
+      expect((e as Error).message).toBe("mid-stream");
+    }
   });
 });

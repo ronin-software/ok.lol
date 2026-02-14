@@ -1,64 +1,86 @@
-import type { Callable } from "./handle";
-import { createPeer } from "./peer";
-
 export interface ConnectOptions {
-  /** Local capabilities to expose to origin */
-  capabilities: Record<string, Callable>;
-  /** JWT for authentication (sent as ?token= query parameter) */
+  /** JWT for authentication (sent as Bearer token) */
   jwt: string;
-  /** Called on errors */
-  onError?: (error: Error) => void;
-  /** Timeout for pending outbound calls in ms (default: 30000) */
-  timeout?: number;
-  /** Origin WebSocket URL (e.g. "wss://origin-123.fly.dev/astral") */
+  /** Base URL for the capability endpoint (e.g. "https://origin.fly.dev/astral") */
   url: string;
 }
 
-export interface ConnectedPeer {
-  /** Call a capability on origin */
+export interface Remote {
+  /** Call a remote capability by name */
   call: (capability: string, input: unknown) => Promise<unknown>;
-  /** Close the WebSocket connection */
-  close: () => void;
 }
 
-/** Connect to origin and establish a bidirectional RPC peer */
-export function connect(options: ConnectOptions): Promise<ConnectedPeer> {
-  const { capabilities, jwt, onError, timeout, url } = options;
+/** Bind a remote capability endpoint for authenticated calls */
+export function connect(options: ConnectOptions): Remote {
+  const { jwt, url } = options;
 
-  // Append JWT as query parameter
-  const endpoint = new URL(url);
-  endpoint.searchParams.set("token", jwt);
-
-  const ws = new WebSocket(endpoint.toString());
-
-  return new Promise<ConnectedPeer>((resolve, reject) => {
-    ws.onopen = () => {
-      const internal = createPeer({
-        capabilities,
-        send: (data) => ws.send(data),
-        timeout,
+  return {
+    async call(capability, input) {
+      const res = await fetch(`${url}/${capability}`, {
+        body: JSON.stringify(input),
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
       });
 
-      ws.onmessage = (event) => {
-        internal.receive(typeof event.data === "string" ? event.data : String(event.data));
-      };
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({ error: res.statusText }))) as {
+          error?: string;
+        };
+        throw new Error(body.error ?? res.statusText);
+      }
 
-      ws.onclose = () => internal.destroy("connection closed");
+      // SSE stream → async iterable
+      if (res.headers.get("content-type")?.includes("text/event-stream")) {
+        return parseSSE(res.body!);
+      }
 
-      ws.onerror = (event) => {
-        const error = event instanceof ErrorEvent ? new Error(event.message) : new Error("WebSocket error");
-        onError?.(error);
-      };
+      // Single JSON result
+      return res.json();
+    },
+  };
+}
 
-      resolve({
-        call: internal.call,
-        close: () => ws.close(),
-      });
-    };
+// –
+// SSE parsing
+// –
 
-    ws.onerror = (event) => {
-      const error = event instanceof ErrorEvent ? new Error(event.message) : new Error("WebSocket connection failed");
-      reject(error);
-    };
-  });
+/** Parse an SSE byte stream into an async iterable of JSON values */
+async function* parseSSE(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<unknown> {
+  const reader = (body as ReadableStream<BufferSource>)
+    .pipeThrough(new TextDecoderStream())
+    .getReader();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += value;
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop()!; // incomplete trailing fragment
+
+      for (const part of parts) {
+        if (!part.trim()) continue;
+
+        let data = "";
+        let event = "message";
+
+        for (const line of part.split("\n")) {
+          if (line.startsWith("data: ")) data = line.slice(6);
+          else if (line.startsWith("event: ")) event = line.slice(7);
+        }
+
+        if (event === "error") throw new Error(JSON.parse(data));
+        if (data) yield JSON.parse(data);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
