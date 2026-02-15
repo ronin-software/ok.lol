@@ -46,6 +46,9 @@ export const CODE_FEE = 4;
 /** Transfer code for payout withdrawals. */
 export const CODE_PAYOUT = 5;
 
+/** Transfer code for hire escrow (base fee + usage budget). */
+export const CODE_ESCROW = 6;
+
 // –
 // Accounts
 // –

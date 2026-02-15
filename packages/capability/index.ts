@@ -4,7 +4,7 @@ import type { z } from "zod";
 /**
  * A capability is a callable function backed by some resource (an application binary, an API, etc).
  */
-export interface Capability<TInput, TOutput> {
+export interface Capability<TExecutionContext, TInput, TOutput> {
 
   // –
   // Functions
@@ -12,8 +12,11 @@ export interface Capability<TInput, TOutput> {
 
   /** Returns whether the capability is available */
   available: () => Promise<boolean>;
-  /** Calls the capability with the provided input */
-  call: (input: TInput) => Promise<TOutput>;
+  /** Calls the capability with the execution context (if any) and the provided input, and returns an output */
+  call: (...args: TExecutionContext extends void
+    ? [input: TInput]
+    : [ectx: TExecutionContext, input: TInput]
+  ) => Promise<TOutput>;
   /** Sets up the capability. Returns early if already setup. Throws on failure */
   setup: () => Promise<void>;
 

@@ -1,12 +1,12 @@
 import {
   bigint,
+  boolean,
   integer,
   jsonb,
   pgTable,
   text,
   timestamp,
-  unique,
-  uuid,
+  uuid
 } from "drizzle-orm/pg-core";
 
 /**
@@ -28,63 +28,114 @@ export const account = pgTable("account", {
 });
 
 // –
-// Bot
+// Principal
 // –
 
-/** A bot bound to an account. Address is `username@ok.lol`. */
-export const bot = pgTable("bot", {
+/** An always-on AI agent bound to an account. Address is `username@ok.lol`. */
+export const principal = pgTable("principal", {
   accountId: text("account_id")
     .references(() => account.id)
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Unique handle; the bot's email is `username@ok.lol`. */
+  /** Unique handle; the principal's email is `username@ok.lol`. */
   username: text("username").notNull().unique(),
 });
 
 // –
-// Bot Document
+// Document
 // –
 
 /**
- * Named document injected into a bot's system prompt.
- * Examples: soul, identity, user, memory.
- * One document per kind per bot, ordered by priority during assembly.
+ * Append-only document versions. Each edit inserts a new row.
+ * The current version of a document is the latest row per (principalId, path).
+ * Rollback = insert a new row with old content.
+ *
+ * Paths are hierarchical: "soul", "identity", "skills/email-handling", etc.
  */
-export const botDocument = pgTable(
-  "bot_document",
-  {
-    botId: uuid("bot_id")
-      .references(() => bot.id)
-      .notNull(),
-    /** Document body injected into the system prompt. */
-    content: text("content").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    id: uuid("id").primaryKey().defaultRandom(),
-    /** Document type: soul, identity, user, memory, etc. */
-    kind: text("kind").notNull(),
-    /** Injection order. Lower values are included first. */
-    priority: integer("priority").notNull().default(0),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (t) => [unique("bot_document_bot_kind").on(t.botId, t.kind)],
-);
+export const document = pgTable("document", {
+  /** Document body injected into the system prompt. */
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** Who created this version */
+  editedBy: text("edited_by", { enum: ["principal", "user"] }).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Hierarchical document path (e.g. "soul", "skills/research") */
+  path: text("path").notNull(),
+  /** Injection order. Lower values are included first. */
+  priority: integer("priority").notNull().default(0),
+  principalId: uuid("principal_id")
+    .references(() => principal.id)
+    .notNull(),
+});
+
+// –
+// Listing
+// –
+
+/** A principal's published service offering. Processed by `act` during execution. */
+export const listing = pgTable("listing", {
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** What callers see when browsing */
+  description: text("description").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** JSON Schema for caller-provided input */
+  inputSchema: jsonb("input_schema"),
+  /** Base fee in micro-USD. Null = free. */
+  price: bigint("price", { mode: "bigint" }),
+  principalId: uuid("principal_id")
+    .references(() => principal.id)
+    .notNull(),
+  /** Markdown instructions for the executor */
+  skill: text("skill").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  /** Estimated max usage in micro-USD. Callers can adjust when hiring. */
+  usageBudget: bigint("usage_budget", { mode: "bigint" }),
+});
+
+// –
+// Hire
+// –
+
+/** An instance of a principal invoking a listing. Lifecycle: escrowed -> settled | refunded. */
+export const hire = pgTable("hire", {
+  callerId: uuid("caller_id")
+    .references(() => principal.id)
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Caller-provided input, validated against listing.inputSchema */
+  input: jsonb("input").notNull().default({}),
+  listingId: uuid("listing_id")
+    .references(() => listing.id)
+    .notNull(),
+  /** TigerBeetle pending transfer ID. Null when listing is fully free. */
+  pendingTransferId: text("pending_transfer_id"),
+  /** 1-5, set by caller after settlement */
+  rating: integer("rating"),
+  settledAt: timestamp("settled_at"),
+  /** escrowed -> settled | refunded */
+  status: text("status").notNull().default("escrowed"),
+  /** Caller-approved usage budget in micro-USD. Defaults to listing.usageBudget. */
+  usageBudget: bigint("usage_budget", { mode: "bigint" }),
+});
 
 // –
 // Message
 // –
 
-/** Inbound event from any channel, routed to a bot for processing. */
+/** Inbound event from any channel, routed to a principal for processing. */
 export const message = pgTable("message", {
-  botId: uuid("bot_id")
-    .references(() => bot.id)
-    .notNull(),
-  /** Source channel (e.g. "email", "api"). */
+  /** Source channel (e.g. "email", "api", "hire"). */
   channel: text("channel").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
   /** Channel-specific payload. */
   payload: jsonb("payload").notNull(),
+  principalId: uuid("principal_id")
+    .references(() => principal.id)
+    .notNull(),
 });
 
 // –
@@ -115,16 +166,19 @@ export const payout = pgTable("payout", {
 // Usage
 // –
 
-/** Per-request token usage and cost log. */
+/** Per-resource consumption event. One row per resource per call. */
 export const usage = pgTable("usage", {
   accountId: text("account_id")
     .references(() => account.id)
     .notNull(),
-  /** Cost in micro-USD (1e-6 USD). */
+  /** Amount consumed (tokens, characters, API calls, etc.) */
+  amount: bigint("amount", { mode: "bigint" }).notNull(),
+  /** Cost in micro-USD (amount * unit cost, computed at write time) */
   cost: bigint("cost", { mode: "bigint" }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** Associated hire, for settlement reimbursement. Null when self-directed. */
+  hireId: uuid("hire_id").references(() => hire.id),
   id: uuid("id").primaryKey().defaultRandom(),
-  inputTokens: integer("input_tokens").notNull(),
-  model: text("model").notNull(),
-  outputTokens: integer("output_tokens").notNull(),
+  /** Payable resource key (e.g. "claude-sonnet-4.5:input", "resend:send") */
+  resource: text("resource").notNull(),
 });
