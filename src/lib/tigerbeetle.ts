@@ -77,8 +77,9 @@ export async function createAccount(accountId: bigint) {
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB create account: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB create account: ${err.result}`);
   }
 }
 
@@ -187,8 +188,9 @@ export async function reserve(
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB reserve: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB reserve: ${err.result}`);
   }
   assert(transferId > 0n, "transferId must be positive");
   return transferId;
@@ -215,8 +217,9 @@ export async function post(pendingId: bigint, amount: bigint) {
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB post: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB post: ${err.result}`);
   }
 }
 
@@ -243,8 +246,9 @@ export async function void_(pendingId: bigint) {
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB void: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB void: ${err.result}`);
   }
 }
 
@@ -322,8 +326,50 @@ export async function transfer(
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB transfer: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB transfer: ${err.result}`);
+  }
+}
+
+// –
+// Usage Debits
+// –
+
+/**
+ * Direct debit from a user account to platform for usage charges.
+ * Unlike `reserve`, this is immediate (no pending/post cycle) because
+ * usage has already occurred by the time we know the token count.
+ */
+export async function debit(
+  accountId: bigint,
+  amount: bigint,
+) {
+  assert(amount > 0n, "amount must be positive");
+  assert(
+    accountId !== PLATFORM_ACCOUNT_ID,
+    "cannot debit the platform account",
+  );
+  const errors = await tb.createTransfers([
+    {
+      amount,
+      code: CODE_USAGE,
+      credit_account_id: PLATFORM_ACCOUNT_ID,
+      debit_account_id: accountId,
+      flags: TransferFlags.none,
+      id: id(),
+      ledger: LEDGER,
+      pending_id: 0n,
+      timeout: 0,
+      timestamp: 0n,
+      user_data_128: 0n,
+      user_data_32: 0,
+      user_data_64: 0n,
+    },
+  ]);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB debit: ${err.result}`);
   }
 }
 
@@ -358,7 +404,8 @@ export async function fund(
       user_data_64: 0n,
     },
   ]);
-  if (errors.length > 0) {
-    throw new Error(`TB fund: ${errors[0].result}`);
+  const [err] = errors;
+  if (err) {
+    throw new Error(`TB fund: ${err.result}`);
   }
 }

@@ -1,44 +1,32 @@
 import type { Capability } from "@ok.lol/capability";
-import { env } from "@/lib/env";
-import { generateText } from "ai";
-import { Resend, type GetReceivingEmailResponseSuccess } from "resend";
+import type { GetReceivingEmailResponseSuccess } from "resend";
 import type { OriginExecutionContext } from "./_execution-context";
-import emailSend from "./email-send";
+import act from "./act";
 
-// Resend SDK
-export const resend = new Resend(env.RESEND_API_KEY);
-
-/** Processes a received email and generates a reply using the principal's documents as context. */
+/**
+ * Processes a received email by delegating to the agent loop.
+ *
+ * Formats the email into a prompt and lets `act` decide how to respond.
+ * The agent uses `send_email` to reply — it decides whether and how to
+ * respond rather than a hardcoded pipeline.
+ */
 const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponseSuccess, void> = {
   available: async () => true,
+
   async call(ectx, email) {
-    // Assemble system prompt from documents
-    const systemParts = ectx.principal.documents.map(
-      (doc) => `## ${doc.path}\n${doc.contents}`,
-    );
-    const system = [
-      ...systemParts,
-      `Your prompts are emails. For each prompt, output a reply.`,
-      `Incoming email:`,
-      `  - Subject: "${email.subject}"`,
-      `  - From: "${email.from}"`,
-    ].join("\n\n");
+    const prompt = [
+      "You received an email. Read it carefully and reply appropriately.",
+      "",
+      `From: ${email.from}`,
+      `Subject: ${email.subject}`,
+      "",
+      email.text ?? "(no body)",
+    ].join("\n");
 
-    // Generate response
-    const response = await generateText({
-      model: "anthropic/claude-sonnet-4.5",
-      prompt: email.text ?? "(no body)",
-      system,
-    });
-
-    // Send reply
-    await emailSend.call(ectx, {
-      subject: email.subject,
-      text: response.text,
-      to: email.from,
-    });
+    await act.call(ectx, { prompt });
   },
-  description: "Processes a received email and generates a reply",
+
+  description: "Processes a received email via the agent loop",
   inputSchema: {},
   name: "email-receive",
   outputSchema: {},

@@ -5,6 +5,22 @@ import { available, lookupAccount } from "@/lib/tigerbeetle";
 import { desc, eq } from "drizzle-orm";
 import { jwtVerify } from "jose";
 
+/** A principal's document, resolved from the DB or injected as a system default. */
+export type Document = {
+  /** Document body. */
+  contents: string;
+  /** True when this is a system-provided default, not a stored document. */
+  default?: boolean;
+  /** Hierarchical document path (e.g. "soul", "skills/research"). */
+  path: string;
+  /** Injection order. Lower values are included first. */
+  priority?: number;
+  /** ISO timestamp of last edit. Absent on defaults. */
+  updatedAt?: string;
+  /** Who created this version. Absent on defaults. */
+  updatedBy?: "principal" | "user";
+};
+
 /**
  * The execution context for capabilities running at the origin.
  *
@@ -29,13 +45,9 @@ export type OriginExecutionContext = {
     /** Credit balance at time of call (unit: 1e-6 USD) */
     credits: bigint;
     /** Current documents (includes listing skill when executing a hire) */
-    documents: {
-      contents: string;
-      /** Hierarchical document path (e.g. "soul", "skills/research") */
-      path: string;
-      updatedAt: string;
-      updatedBy: 'principal' | 'user';
-    }[];
+    documents: Document[];
+    /** The principal's ID */
+    id: string;
     /** The principal's username */
     username: string;
   };
@@ -94,10 +106,11 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
   const tbAccount = await lookupAccount(BigInt(row.accountId));
   const credits = tbAccount ? available(tbAccount) : 0n;
 
-  // Build base documents
-  const contextDocs = currentDocs.map((d) => ({
+  // Build base documents.
+  const contextDocs: Document[] = currentDocs.map((d) => ({
     contents: d.content,
     path: d.path,
+    priority: d.priority,
     updatedAt: d.createdAt.toISOString(),
     updatedBy: d.editedBy,
   }));
@@ -136,8 +149,9 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
       contextDocs.push({
         contents: listingRow.skill,
         path: "skill",
+        priority: 100, // Skills inject after core documents.
         updatedAt: listingRow.updatedAt.toISOString(),
-        updatedBy: "user" as const,
+        updatedBy: "user",
       });
     }
   }
@@ -148,6 +162,7 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
       accountId: row.accountId,
       credits,
       documents: contextDocs,
+      id: row.id,
       username: row.username,
     },
   };

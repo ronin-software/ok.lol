@@ -8,8 +8,8 @@
 
 /** Unit cost per resource in micro-USD */
 export const unitCosts: Record<string, bigint> = {
-  "claude-sonnet-4.5:input": 3n,
-  "claude-sonnet-4.5:output": 15n,
+  "claude-sonnet-4-5-20250929:input": 3n,
+  "claude-sonnet-4-5-20250929:output": 15n,
   "resend:send": 1000n,
 };
 
