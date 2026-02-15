@@ -15,7 +15,7 @@ const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponse
 
   async call(ectx, email) {
     const prompt = [
-      "You received an email. Read it carefully and reply appropriately.",
+      "You received an email. Read it carefully and reply appropriately if needed. If the email is spam, email me (danscan@ronindevs.com) and let me know. If you take an action on a a received email (other than spam), reply back let the sender know. Be mindful of whether the email was sent by me or someone else. You can email me to let me know when you receive an email and it warrants my attention, and you can reply to conversational emails sent by others.",
       "",
       `From: ${email.from}`,
       `Subject: ${email.subject}`,

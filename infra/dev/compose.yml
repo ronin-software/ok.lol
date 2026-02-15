@@ -10,7 +10,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   tigerbeetle:
-    image: ghcr.io/tigerbeetle/tigerbeetle
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.16.72
     ports:
       - "3000:3000"
     entrypoint: /entrypoint.sh

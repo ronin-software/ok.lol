@@ -13,6 +13,7 @@ export type { Account } from "tigerbeetle-node";
 // Persist across HMR in development.
 const globalStore = globalThis as unknown as {
   __tb?: ReturnType<typeof createClient>;
+  __tbBootstrapped?: boolean;
 };
 const tb = (globalStore.__tb ??= createClient({
   cluster_id: BigInt(process.env.TB_CLUSTER_ID ?? "0"),
@@ -124,6 +125,7 @@ export function available(account: Account): bigint {
 
 /** Ensure the platform revenue account exists. Idempotent. */
 export async function bootstrap() {
+  if (globalStore.__tbBootstrapped) return;
   await tb.createAccounts([
     {
       code: CODE_USAGE,
@@ -142,6 +144,7 @@ export async function bootstrap() {
     },
   ]);
   // Ignore "exists" errors — idempotent by design.
+  globalStore.__tbBootstrapped = true;
 }
 
 // –

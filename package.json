@@ -21,7 +21,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "dev": "bun run dev:infra && next dev --port 3001",
+    "dev": "bun run dev:infra && bun --bun next dev --port 3001",
     "dev:infra": "docker compose -f infra/dev/compose.yml up -d",
     "dev:stripe": "stripe listen --forward-to localhost:3001/api/stripe/webhook",
     "lint": "eslint",

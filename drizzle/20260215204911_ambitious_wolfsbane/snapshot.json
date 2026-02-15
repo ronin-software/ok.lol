@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "39c43a80-8860-4849-a3dd-4e9103504626",
+  "id": "1ab6775c-1536-4601-9e3e-18676a56bdd1",
   "prevIds": [
     "00000000-0000-0000-0000-000000000000"
   ],
@@ -14,13 +14,19 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "bot",
+      "name": "document",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "bot_document",
+      "name": "hire",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "listing",
       "entityType": "tables",
       "schema": "public"
     },
@@ -33,6 +39,12 @@
     {
       "isRlsEnabled": false,
       "name": "payout",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "principal",
       "entityType": "tables",
       "schema": "public"
     },
@@ -141,75 +153,10 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "account_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bot"
-    },
-    {
-      "type": "timestamp",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bot"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "gen_random_uuid()",
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bot"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "username",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bot"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "bot_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "bot_document"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
       "name": "content",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "document"
     },
     {
       "type": "timestamp",
@@ -222,7 +169,20 @@
       "name": "created_at",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "document"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "edited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "document"
     },
     {
       "type": "uuid",
@@ -235,7 +195,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "document"
     },
     {
       "type": "text",
@@ -245,10 +205,10 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "kind",
+      "name": "path",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "document"
     },
     {
       "type": "integer",
@@ -261,7 +221,254 @@
       "name": "priority",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "document"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "principal_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "document"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "caller_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "input",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "listing_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "pending_transfer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "rating",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "settled_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'escrowed'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "usage_budget",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "active",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "input_schema",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "price",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "principal_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "skill",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "listing"
     },
     {
       "type": "timestamp",
@@ -274,20 +481,20 @@
       "name": "updated_at",
       "entityType": "columns",
       "schema": "public",
-      "table": "bot_document"
+      "table": "listing"
     },
     {
-      "type": "uuid",
+      "type": "bigint",
       "typeSchema": null,
-      "notNull": true,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "bot_id",
+      "name": "usage_budget",
       "entityType": "columns",
       "schema": "public",
-      "table": "message"
+      "table": "listing"
     },
     {
       "type": "text",
@@ -337,6 +544,19 @@
       "generated": null,
       "identity": null,
       "name": "payload",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "message"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "principal_id",
       "entityType": "columns",
       "schema": "public",
       "table": "message"
@@ -469,6 +689,71 @@
       "name": "account_id",
       "entityType": "columns",
       "schema": "public",
+      "table": "principal"
+    },
+    {
+      "type": "timestamp",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "principal"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "principal"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "username",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "principal"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "account_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "usage"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "amount",
+      "entityType": "columns",
+      "schema": "public",
       "table": "usage"
     },
     {
@@ -500,25 +785,25 @@
     {
       "type": "uuid",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "hire_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "usage"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "gen_random_uuid()",
       "generated": null,
       "identity": null,
       "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "input_tokens",
       "entityType": "columns",
       "schema": "public",
       "table": "usage"
@@ -531,20 +816,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "model",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "usage"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "output_tokens",
+      "name": "resource",
       "entityType": "columns",
       "schema": "public",
       "table": "usage"
@@ -552,50 +824,84 @@
     {
       "nameExplicit": false,
       "columns": [
-        "account_id"
+        "principal_id"
       ],
       "schemaTo": "public",
-      "tableTo": "account",
+      "tableTo": "principal",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "bot_account_id_account_id_fkey",
+      "name": "document_principal_id_principal_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "bot"
+      "table": "document"
     },
     {
       "nameExplicit": false,
       "columns": [
-        "bot_id"
+        "caller_id"
       ],
       "schemaTo": "public",
-      "tableTo": "bot",
+      "tableTo": "principal",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "bot_document_bot_id_bot_id_fkey",
+      "name": "hire_caller_id_principal_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "bot_document"
+      "table": "hire"
     },
     {
       "nameExplicit": false,
       "columns": [
-        "bot_id"
+        "listing_id"
       ],
       "schemaTo": "public",
-      "tableTo": "bot",
+      "tableTo": "listing",
       "columnsTo": [
         "id"
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
-      "name": "message_bot_id_bot_id_fkey",
+      "name": "hire_listing_id_listing_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "hire"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "principal_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "principal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "listing_principal_id_principal_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "listing"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "principal_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "principal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "message_principal_id_principal_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "message"
@@ -629,7 +935,41 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
+      "name": "principal_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "principal"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "account_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "account",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
       "name": "usage_account_id_account_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "usage"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "hire_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "hire",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "usage_hire_id_hire_id_fkey",
       "entityType": "fks",
       "schema": "public",
       "table": "usage"
@@ -649,9 +989,9 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "bot_pkey",
+      "name": "document_pkey",
       "schema": "public",
-      "table": "bot",
+      "table": "document",
       "entityType": "pks"
     },
     {
@@ -659,9 +999,19 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "bot_document_pkey",
+      "name": "hire_pkey",
       "schema": "public",
-      "table": "bot_document",
+      "table": "hire",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "listing_pkey",
+      "schema": "public",
+      "table": "listing",
       "entityType": "pks"
     },
     {
@@ -689,22 +1039,20 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "principal_pkey",
+      "schema": "public",
+      "table": "principal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "usage_pkey",
       "schema": "public",
       "table": "usage",
       "entityType": "pks"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        "bot_id",
-        "kind"
-      ],
-      "nullsNotDistinct": false,
-      "name": "bot_document_bot_kind",
-      "entityType": "uniques",
-      "schema": "public",
-      "table": "bot_document"
     },
     {
       "nameExplicit": false,
@@ -723,9 +1071,9 @@
         "username"
       ],
       "nullsNotDistinct": false,
-      "name": "bot_username_key",
+      "name": "principal_username_key",
       "schema": "public",
-      "table": "bot",
+      "table": "principal",
       "entityType": "uniques"
     }
   ],

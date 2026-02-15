@@ -1,5 +1,5 @@
-export default function Home() {
-  return (
-    <div>Ok.lol Origin</div>
-  );
+import { redirect } from "next/navigation";
+
+export default function RootPage() {
+  redirect("/sign-up");
 }

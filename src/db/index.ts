@@ -10,4 +10,4 @@ const globalStore = globalThis as unknown as {
 const client = (globalStore.__pg ??= postgres(env.DATABASE_URL));
 
 /** Drizzle client bound to all schema tables. */
-export const db = drizzle(client, { schema });
+export const db = drizzle({ client, schema });
