@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { usage } from "@/db/schema";
 import { assert } from "@/lib/assert";
 import { computeCost } from "@/lib/pricing";
+import { env } from "@/lib/env";
 import { debit } from "@/lib/tigerbeetle";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { UIMessage } from "ai";
@@ -65,6 +66,7 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     caller: ectx.caller,
     capabilities: [...origin.capabilities, ...remote.directory],
     credits: ectx.principal.credits,
+    domain: env.EMAIL_DOMAIN,
     documents,
     username: ectx.principal.username,
   });

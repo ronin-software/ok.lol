@@ -9,7 +9,9 @@ import { env } from "./env";
 export const resend = new Resend(env.RESEND_API_KEY);
 
 /** Default sender address for transactional email. */
-const FROM = "ok.lol <noreply@ok.lol>";
+function from() {
+  return `ok.lol <noreply@${env.EMAIL_DOMAIN}>`;
+}
 
 /** Send a password reset email with a one-time link. */
 export async function sendResetEmail(
@@ -17,9 +19,9 @@ export async function sendResetEmail(
   resetUrl: string,
 ): Promise<void> {
   const { error } = await resend.emails.send({
-    from: FROM,
+    from: from(),
     html: [
-      "<p>A password reset was requested for your ok.lol account.</p>",
+      `<p>A password reset was requested for your ${env.EMAIL_DOMAIN} account.</p>`,
       `<p><a href="${resetUrl}">Reset your password</a></p>`,
       "<p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>",
     ].join(""),

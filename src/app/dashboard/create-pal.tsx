@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { BUTTON_PRIMARY as BUTTON, CARD, INPUT, LABEL } from "./styles";
 
+const domain = process.env.NEXT_PUBLIC_EMAIL_DOMAIN ?? "ok.lol";
+
 export default function CreatePal() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function CreatePal() {
       <p className="mt-2 text-sm text-zinc-400">
         Your pal will be able to send and receive emails from{" "}
         <span className="font-medium text-white">
-          {name || "username"}@ok.lol
+          {name || "username"}@{domain}
         </span>
         .
       </p>
@@ -58,7 +60,7 @@ export default function CreatePal() {
               "text-sm text-zinc-500 select-none",
             ].join(" ")}
           >
-            @ok.lol
+            @{domain}
           </span>
         </div>
         {name.length > 0 && name.length < 4 && (
@@ -74,7 +76,7 @@ export default function CreatePal() {
           {loading ? "Redirecting..." : "Secure for $20"}
         </button>
         <p className="text-xs text-zinc-500">
-          The $20 registration fee is added to your ok.lol credit balance.
+          The $20 registration fee is added to your {domain} credit balance.
         </p>
       </form>
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}

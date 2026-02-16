@@ -10,9 +10,15 @@ import { createCheckoutSession } from "@/lib/stripe";
 /** Pal registration costs $20, credited to the account balance. */
 const REGISTRATION_CENTS = 2000;
 
+/** Principal usernames that cannot be used */
+const RESERVED = new Set(["www"]);
+
+/** Pattern for principal username validation */
 const USERNAME_RE = /^[a-z][a-z0-9_-]*$/;
 
-const Body = z.object({ username: z.string().min(1) });
+
+/** Schema for requests to POST /api/pal */
+const RequestBodySchema = z.object({ username: z.string().min(1) });
 
 /**
  * POST /api/pal
@@ -28,7 +34,7 @@ export async function POST(req: Request) {
   const accountId = await verify();
   if (!accountId) return error(401, "Unauthorized");
 
-  const parsed = Body.safeParse(await req.json());
+  const parsed = RequestBodySchema.safeParse(await req.json());
   if (!parsed.success) return error(400, "Missing username");
   const { username } = parsed.data;
 
@@ -41,6 +47,9 @@ export async function POST(req: Request) {
       400,
       "Username must start with a letter and contain only lowercase letters, numbers, hyphens, and underscores",
     );
+  }
+  if (RESERVED.has(name)) {
+    return error(400, "Username is reserved");
   }
 
   // Check uniqueness.

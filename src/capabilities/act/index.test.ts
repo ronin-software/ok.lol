@@ -44,6 +44,7 @@ function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
     capabilities: testCapabilities,
     credits: 1_000_000n,
+    domain: "ok.lol",
     documents: withDefaults([]),
     username: "test",
     ...overrides,

@@ -31,14 +31,14 @@ export const account = pgTable("account", {
 // Principal
 // –
 
-/** An always-on AI agent bound to an account. Address is `username@ok.lol`. */
+/** An always-on AI agent bound to an account. Address is `username@<domain>`. */
 export const principal = pgTable("principal", {
   accountId: text("account_id")
     .references(() => account.id)
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Unique handle; the principal's email is `username@ok.lol`. */
+  /** Unique handle; doubles as the principal's email local-part. */
   username: text("username").notNull().unique(),
 });
 

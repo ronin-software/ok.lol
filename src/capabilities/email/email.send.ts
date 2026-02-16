@@ -28,18 +28,18 @@ type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.void();
 
-/** Sends an email from the principal's `@ok.lol` address. */
+/** Sends an email from the principal's address. */
 const emailSend: Capability<OriginExecutionContext, Input, void> = {
   available: async () => true,
   async call(ectx, email) {
     await logCall(ectx, "email-send", email);
-    const from = `${ectx.principal.username}@ok.lol`;
+    const from = `${ectx.principal.username}@${env.EMAIL_DOMAIN}`;
     // Cast needed: Omit over a discriminated union loses branch structure.
     await resend.emails.send({ ...email, from } as CreateEmailOptions);
   },
   setup: async () => {},
 
-  description: "Sends an email from the principal's @ok.lol address",
+  description: `Sends an email from the principal's @${env.EMAIL_DOMAIN} address`,
   name: "send_email",
 
   inputSchema,

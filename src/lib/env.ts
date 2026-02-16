@@ -30,6 +30,10 @@ export const env = {
   get DATABASE_URL() {
     return required("DATABASE_URL");
   },
+  /** Email domain for the current environment. */
+  get EMAIL_DOMAIN() {
+    return process.env.NEXT_PUBLIC_EMAIL_DOMAIN ?? "ok.lol";
+  },
   get RESEND_API_KEY() {
     return required("RESEND_API_KEY");
   },

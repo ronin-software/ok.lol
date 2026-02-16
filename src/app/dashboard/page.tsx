@@ -2,6 +2,7 @@ import { withDefaults } from "@/capabilities/documents/defaults";
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
 import { account, log, principal, usage as usageTable, worker } from "@/db/schema";
+import { env } from "@/lib/env";
 import { verify } from "@/lib/session";
 import * as tb from "@/lib/tigerbeetle";
 import { desc, eq } from "drizzle-orm";
@@ -187,7 +188,7 @@ function PalBadge({ username }: { username: string }) {
     >
       <div>
         <p className="text-sm font-medium text-white">
-          {username}@ok.lol
+          {username}@{env.EMAIL_DOMAIN}
         </p>
         <p className="text-xs text-zinc-500">
           Your pal can send and receive emails at this address.
