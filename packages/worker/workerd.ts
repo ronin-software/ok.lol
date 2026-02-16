@@ -14,11 +14,18 @@
 import {
   handle,
   hmac,
-  type Callable,
   type Result,
   type Yield
 } from "@ok.lol/astral";
+import type { Capability } from "@ok.lol/capability";
+import { z } from "zod";
 import * as caps from "./capabilities";
+
+/** Timestamped log line. */
+function log(tag: string, ...args: string[]) {
+  const t = new Date().toISOString().slice(11, 23);
+  console.log(`[${t}] ${tag}`, ...args);
+}
 
 // –
 // Configuration
@@ -32,17 +39,10 @@ if (!SECRET) {
 
 const PORT = Number(process.env.PORT ?? 7420);
 
-/** Capability with metadata, for the directory endpoint. */
-type RegisteredCapability = Callable & {
-  description: string;
-  inputSchema: unknown;
-  name: string;
-};
-
 // Register all exported capabilities.
-const capabilities: Record<string, RegisteredCapability> = {};
+const capabilities: Record<string, Capability<void, unknown, unknown>> = {};
 for (const value of Object.values(caps)) {
-  const cap = value as RegisteredCapability;
+  const cap = value as Capability<void, unknown, unknown>;
   capabilities[cap.name] = cap;
 }
 
@@ -55,17 +55,23 @@ const dispatch = handle(capabilities);
 Bun.serve({
   port: PORT,
   async fetch(req) {
-    // Unauthenticated capability directory with schemas.
-    if (req.method === "GET") {
+    const method = req.method;
+    const path = new URL(req.url).pathname;
+
+    // Unauthenticated capability directory with JSON schemas for the wire.
+    if (method === "GET") {
+      log("GET", path);
       return Response.json({
         capabilities: Object.values(capabilities).map((c) => ({
-          description: c.description,
-          inputSchema: c.inputSchema,
           name: c.name,
+          description: c.description,
+          inputSchema: z.toJSONSchema(c.inputSchema),
+          outputSchema: z.toJSONSchema(c.outputSchema),
         })),
       });
     }
-    if (req.method !== "POST") {
+    if (method !== "POST") {
+      log("REJECT", `${method} ${path} — 405`);
       return new Response("Method Not Allowed", { status: 405 });
     }
 
@@ -74,12 +80,14 @@ Bun.serve({
     // Verify signature.
     const sig = req.headers.get(hmac.HEADER);
     if (!sig || !(await hmac.verify(body, sig, SECRET))) {
+      log("REJECT", `${path} — 401 unauthorized`);
       return new Response("Unauthorized", { status: 401 });
     }
 
     // Resolve capability from last path segment.
-    const name = new URL(req.url).pathname.split("/").filter(Boolean).pop();
+    const name = path.split("/").filter(Boolean).pop();
     if (!name || !Object.hasOwn(capabilities, name)) {
+      log("REJECT", `${path} — 404 unknown capability`);
       return new Response("Not Found", { status: 404 });
     }
 
@@ -89,11 +97,15 @@ Bun.serve({
       try {
         input = JSON.parse(body);
       } catch {
+        log("REJECT", `${name} — 400 bad json`);
         return new Response("Bad Request", { status: 400 });
       }
     }
 
-    return respond(
+    log("CALL", name, body.length > 200 ? body.slice(0, 200) + "…" : body);
+    const start = performance.now();
+
+    const res = await respond(
       dispatch({
         capability: name,
         id: crypto.randomUUID(),
@@ -101,6 +113,10 @@ Bun.serve({
         type: "call",
       }),
     );
+
+    const ms = (performance.now() - start).toFixed(0);
+    log("DONE", name, `${res.status} in ${ms}ms`);
+    return res;
   },
 });
 

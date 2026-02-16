@@ -1,4 +1,4 @@
-import { withDefaults } from "@/capabilities/_defaults";
+import { withDefaults } from "@/capabilities/documents/defaults";
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
 import { account, log, principal, usage as usageTable, worker } from "@/db/schema";

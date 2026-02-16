@@ -1,8 +1,9 @@
 import type { Capability } from "@ok.lol/capability";
 import type { GetReceivingEmailResponseSuccess } from "resend";
-import type { OriginExecutionContext } from "./_execution-context";
-import { logCall } from "./_log";
-import act from "./act";
+import { z } from "zod";
+import type { OriginExecutionContext } from "../_execution-context";
+import { logCall } from "../_log";
+import act from "../act";
 
 /**
  * Processes a received email by delegating to the agent loop.
@@ -31,9 +32,11 @@ const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponse
   },
 
   description: "Processes a received email via the agent loop",
-  inputSchema: {},
   name: "email-receive",
-  outputSchema: {},
+
+  // Not tool-derived — schema is structural only.
+  inputSchema: z.any(),
+  outputSchema: z.void(),
   setup: async () => {},
 };
 

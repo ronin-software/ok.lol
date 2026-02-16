@@ -6,7 +6,6 @@
   "dependencies": {
     "@ok.lol/astral": "workspace:*",
     "@ok.lol/capability": "workspace:*",
-    "@ok.lol/jsonschema": "workspace:*",
     "zod": "catalog:"
   }
 }

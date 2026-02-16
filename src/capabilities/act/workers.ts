@@ -9,20 +9,23 @@
 import { db } from "@/db";
 import { worker } from "@/db/schema";
 import { hmac } from "@ok.lol/astral";
+import type { CapabilitySpec } from "@ok.lol/capability";
 import { tool } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import type { JSONSchema } from "zod/v4/core";
 
-/** Capability metadata returned by a worker's GET / endpoint. */
-type RemoteCapability = {
-  description: string;
-  inputSchema: Record<string, unknown>;
-  name: string;
+/** Shape returned by a worker's GET / directory endpoint. */
+type WireCapability = CapabilitySpec & {
+  /** JSONSchema-serialized input schema. */
+  inputSchema: JSONSchema.JSONSchema;
+  /** JSONSchema-serialized output schema. */
+  outputSchema: JSONSchema.JSONSchema;
 };
 
 /** A reachable worker with its discovered capabilities. */
 type Endpoint = {
-  capabilities: RemoteCapability[];
+  capabilities: WireCapability[];
   name: string;
   secret: string;
   url: string;
@@ -57,14 +60,14 @@ export async function discover(accountId: string): Promise<Endpoint[]> {
         const body = (await res.json()) as { capabilities?: unknown };
         if (!Array.isArray(body.capabilities)) return;
 
-        // Filter to capabilities that include full metadata (name + inputSchema).
-        // Workers running older versions may return bare strings — skip those.
+        // Filter to capabilities with full wire metadata.
         const valid = body.capabilities.filter(
-          (c): c is RemoteCapability =>
+          (c): c is WireCapability =>
             c != null &&
             typeof c === "object" &&
             typeof (c as Record<string, unknown>).name === "string" &&
-            (c as Record<string, unknown>).inputSchema != null,
+            (c as Record<string, unknown>).inputSchema != null &&
+            (c as Record<string, unknown>).outputSchema != null,
         );
         if (valid.length === 0) return;
 
@@ -100,7 +103,7 @@ function sanitize(s: string): string {
  */
 export function makeTools(endpoints: Endpoint[]) {
   const tools: Record<string, ReturnType<typeof tool<unknown, unknown>>> = {};
-  const directory: { description: string; name: string }[] = [];
+  const directory: CapabilitySpec[] = [];
 
   for (const ep of endpoints) {
     const prefix = sanitize(ep.name);
@@ -113,6 +116,7 @@ export function makeTools(endpoints: Endpoint[]) {
         description,
         execute: callWorker(ep.url, ep.secret, cap.name),
         inputSchema: z.fromJSONSchema(cap.inputSchema),
+        outputSchema: z.fromJSONSchema(cap.outputSchema),
       });
 
       directory.push({ description, name });
@@ -151,4 +155,3 @@ function callWorker(
     return res.json();
   };
 }
-

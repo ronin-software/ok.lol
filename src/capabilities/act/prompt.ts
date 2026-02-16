@@ -1,5 +1,6 @@
 import { assert } from "@/lib/assert";
-import type { Document, OriginExecutionContext } from "./_execution-context";
+import type { CapabilitySpec } from "@ok.lol/capability";
+import type { Document, OriginExecutionContext } from "../_execution-context";
 
 /**
  * Budget-aware system prompt assembly.
@@ -26,7 +27,7 @@ export type PromptOptions = {
   /** Hire caller info, if executing on behalf of another principal. */
   caller?: OriginExecutionContext["caller"];
   /** Available capabilities for the directory section. */
-  capabilities: { description: string; name: string }[];
+  capabilities: CapabilitySpec[];
   /** Credit balance in micro-USD. */
   credits: bigint;
   /** Principal's documents (already merged with defaults). */
@@ -135,7 +136,7 @@ function buildDocuments(
 
 /** Compact directory of available capabilities (tools). */
 function buildCapabilities(
-  capabilities: { description: string; name: string }[],
+  capabilities: CapabilitySpec[],
 ): string {
   const lines = capabilities.map((c) => `- **${c.name}**: ${c.description}`);
   return `## Tools\n\n${lines.join("\n")}`;

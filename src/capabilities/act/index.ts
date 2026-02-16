@@ -4,14 +4,14 @@ import { assert } from "@/lib/assert";
 import { computeCost } from "@/lib/pricing";
 import { debit } from "@/lib/tigerbeetle";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { convertToModelMessages, streamText, stepCountIs } from "ai";
 import type { UIMessage } from "ai";
-import { withDefaults } from "./_defaults";
-import type { OriginExecutionContext } from "./_execution-context";
-import { logCall } from "./_log";
-import { assemblePrompt } from "./_prompt";
-import { makeTools, toolDirectory } from "./_tools";
-import * as workers from "./_workers";
+import { convertToModelMessages, stepCountIs, streamText } from "ai";
+import { withDefaults } from "../documents/defaults";
+import type { OriginExecutionContext } from "../_execution-context";
+import { logCall } from "../_log";
+import { assemblePrompt } from "./prompt";
+import { makeTools } from "./tools";
+import * as workers from "./workers";
 
 /**
  * The agent loop. Processes input through multi-step inference, calling
@@ -54,7 +54,8 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   await logCall(ectx, "act", input);
   const modelId = input.model ?? DEFAULT_MODEL;
 
-  // Discover online workers and build remote tools.
+  // Build origin tools and discover remote worker tools.
+  const origin = makeTools(ectx);
   const endpoints = await workers.discover(ectx.principal.accountId);
   const remote = workers.makeTools(endpoints);
 
@@ -62,12 +63,12 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   const documents = withDefaults(ectx.principal.documents);
   const system = assemblePrompt({
     caller: ectx.caller,
-    capabilities: [...toolDirectory, ...remote.directory],
+    capabilities: [...origin.capabilities, ...remote.directory],
     credits: ectx.principal.credits,
     documents,
     username: ectx.principal.username,
   });
-  const tools = { ...makeTools(ectx), ...remote.tools };
+  const tools = { ...origin.tools, ...remote.tools };
 
   // Convert UI messages to model messages, or use prompt directly.
   const messageInput = input.messages

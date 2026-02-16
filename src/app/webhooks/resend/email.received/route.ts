@@ -1,4 +1,4 @@
-import emailReceive from "@/capabilities/email-receive";
+import emailReceive from "@/capabilities/email/email.receive";
 import { getExecutionContext } from "@/capabilities/_execution-context";
 import { db } from "@/db";
 import { principal } from "@/db/schema";

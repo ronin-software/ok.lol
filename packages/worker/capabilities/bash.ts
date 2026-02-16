@@ -1,42 +1,27 @@
-import { type Capability, zodToJsonSchema } from "@ok.lol/capability";
-import z from "zod";
-
-/** Args for calling the bash capability */
-interface CallArgs {
-  /** The command to execute */
-  command: string;
-}
-
-/** Result of a bash capability call */
-interface CallResult {
-  /** Process exit code */
-  exitCode: number;
-  /** Standard error output */
-  stderr: string;
-  /** Standard output */
-  stdout: string;
-}
+import type { Capability } from "@ok.lol/capability";
+import { z } from "zod";
 
 // –
 // Schemas
 // –
 
 const inputSchema = z.object({
-  command: z.string().describe('The bash command to execute'),
+  command: z.string().describe("The bash command to execute"),
 });
 
 const outputSchema = z.object({
-  exitCode: z.number().describe('Process exit code'),
-  stderr: z.string().describe('Standard error output'),
-  stdout: z.string().describe('Standard output'),
+  exitCode: z.number().describe("Process exit code"),
+  stderr: z.string().describe("Standard error output"),
+  stdout: z.string().describe("Standard output"),
 });
 
-/** Runs bash commands on the host */
-export const bash = {
-  /** Returns whether bash is available */
+type Input = z.infer<typeof inputSchema>;
+type Output = z.infer<typeof outputSchema>;
+
+/** Runs bash commands on the host. */
+export const bash: Capability<void, Input, Output> = {
   available: async () => Bun.which("bash") !== null,
-  /** Runs a bash command */
-  call: async ({ command }) => {
+  async call({ command }) {
     const proc = Bun.spawn(["bash", "-c", command], {
       stderr: "pipe",
       stdout: "pipe",
@@ -48,12 +33,11 @@ export const bash = {
     ]);
     return { exitCode, stderr, stdout };
   },
-  /** No-op. Bash is either installed or it is not */
   setup: async () => {},
 
   description: "Runs bash commands on the host",
   name: "bash",
 
-  inputSchema: zodToJsonSchema(inputSchema),
-  outputSchema: zodToJsonSchema(outputSchema),
-} satisfies Capability<void, CallArgs, CallResult>;
+  inputSchema,
+  outputSchema,
+};

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
 import { bash } from "./bash";
 
 describe("bash", () => {
@@ -30,10 +31,13 @@ describe("bash", () => {
   });
 
   test("exposes valid schemas", () => {
-    expect(bash.inputSchema.type).toBe("object");
-    expect(bash.inputSchema.properties).toEqual({ command: { description: "The bash command to execute", type: "string" } });
-    expect(bash.inputSchema.required).toEqual(["command"]);
-    // Note: Not asserted as thoroughly as inputSchema
-    expect(bash.outputSchema.type).toBe("object");
+    // Schemas are zod types; verify via JSON schema conversion.
+    const input = z.toJSONSchema(bash.inputSchema);
+    expect(input.type).toBe("object");
+    expect(input.properties).toHaveProperty("command");
+    expect(input.required).toEqual(["command"]);
+
+    const output = z.toJSONSchema(bash.outputSchema);
+    expect(output.type).toBe("object");
   });
 });

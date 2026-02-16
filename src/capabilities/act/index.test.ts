@@ -1,11 +1,15 @@
-import { describe, expect, test } from "bun:test";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateText, stepCountIs, tool } from "ai";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { Document } from "./_execution-context";
-import { CORE_PATHS, withDefaults } from "./_defaults";
-import { assemblePrompt, type PromptOptions } from "./_prompt";
-import { toolDirectory } from "./_tools";
+import { CORE_PATHS, withDefaults } from "../documents/defaults";
+import { listDocuments, readDocument, writeDocument } from "../documents";
+import type { Document } from "../_execution-context";
+import { assemblePrompt, type PromptOptions } from "./prompt";
+import emailSend from "../email/email.send";
+
+/** Capabilities for test prompt assembly. */
+const testCapabilities = [emailSend, listDocuments, readDocument, writeDocument];
 
 /**
  * Tests for the `act` capability's context injection, document discovery,
@@ -38,7 +42,7 @@ const MODEL_TIMEOUT = 60_000;
 /** Builds a minimal PromptOptions for testing. */
 function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
-    capabilities: toolDirectory,
+    capabilities: testCapabilities,
     credits: 1_000_000n,
     documents: withDefaults([]),
     username: "test",
