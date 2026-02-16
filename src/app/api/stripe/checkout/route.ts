@@ -2,9 +2,9 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { account } from "@/db/schema";
-import { identify } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { error } from "@/lib/http";
+import { verify } from "@/lib/session";
 import { createCheckoutSession } from "@/lib/stripe";
 
 const Body = z.object({ dollars: z.number().min(1) });
@@ -19,7 +19,7 @@ const Body = z.object({ dollars: z.number().min(1) });
  * Returns: { url: string }
  */
 export async function POST(req: Request) {
-  const accountId = await identify();
+  const accountId = await verify();
   if (!accountId) return error(401, "Unauthorized");
 
   const parsed = Body.safeParse(await req.json());

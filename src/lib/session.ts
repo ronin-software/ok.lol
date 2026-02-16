@@ -15,6 +15,9 @@ const COOKIE = "session";
 /** 30 days in seconds. */
 const MAX_AGE = 30 * 24 * 60 * 60;
 
+/** Only require Secure in production (HTTPS). */
+const SECURE = process.env.NODE_ENV === "production";
+
 /** HMAC secret derived from env. Shared with reset tokens. */
 export function secret(): Uint8Array {
   return new TextEncoder().encode(env.SESSION_SECRET);
@@ -28,14 +31,15 @@ export async function create(accountId: string): Promise<string> {
     .setExpirationTime(`${MAX_AGE}s`)
     .sign(secret());
 
-  return [
+  const parts = [
     `${COOKIE}=${token}`,
     "HttpOnly",
-    "Secure",
     "SameSite=Lax",
     "Path=/",
     `Max-Age=${MAX_AGE}`,
-  ].join("; ");
+  ];
+  if (SECURE) parts.push("Secure");
+  return parts.join("; ");
 }
 
 /**
@@ -58,12 +62,13 @@ export async function verify(): Promise<string | undefined> {
 
 /** Set-Cookie header value that expires the session. */
 export function clear(): string {
-  return [
+  const parts = [
     `${COOKIE}=`,
     "HttpOnly",
-    "Secure",
     "SameSite=Lax",
     "Path=/",
     "Max-Age=0",
-  ].join("; ");
+  ];
+  if (SECURE) parts.push("Secure");
+  return parts.join("; ");
 }

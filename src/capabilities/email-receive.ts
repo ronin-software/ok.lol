@@ -25,7 +25,9 @@ const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponse
       email.text ?? "(no body)",
     ].join("\n");
 
-    await act.call(ectx, { prompt });
+    // Consume the stream to ensure completion and usage recording.
+    const result = await act(ectx, { prompt });
+    await result.text;
   },
 
   description: "Processes a received email via the agent loop",

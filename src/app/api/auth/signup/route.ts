@@ -15,7 +15,7 @@ const Body = z.object({
 });
 
 /**
- * POST /api/signup
+ * POST /api/auth/signup
  *
  * Creates an account, Stripe Customer, and TigerBeetle ledger entry.
  * Sets a session cookie on success.

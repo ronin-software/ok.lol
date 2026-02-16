@@ -1,10 +1,12 @@
 import { withDefaults } from "@/capabilities/_defaults";
 import { db } from "@/db";
-import { account, document, log, principal, usage as usageTable } from "@/db/schema";
+import { currentDocuments } from "@/db/documents";
+import { account, log, principal, usage as usageTable } from "@/db/schema";
 import { verify } from "@/lib/session";
 import * as tb from "@/lib/tigerbeetle";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import BalanceCard from "./balance-card";
 import CreatePal from "./create-pal";
@@ -68,12 +70,23 @@ export default async function Dashboard() {
 
   const activity: ActivityEntry[] = [
     ...logRows.map(
-      (r) => ({ capability: r.capability, createdAt: r.createdAt, input: r.input, kind: "log" }) as const,
+      (r) => ({
+        capability: r.capability,
+        createdAt: r.createdAt.toISOString(),
+        input: r.input,
+        kind: "log",
+      }) as const,
     ),
     ...usageRows.map(
-      (r) => ({ amount: r.amount, cost: r.cost, createdAt: r.createdAt, kind: "usage", resource: r.resource }) as const,
+      (r) => ({
+        cost: Number(r.cost) / 1_000_000,
+        createdAt: r.createdAt.toISOString(),
+        detail: `${Number(r.amount).toLocaleString()} tokens`,
+        kind: "usage",
+        resource: r.resource,
+      }) as const,
     ),
-  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   // Flash cookie set by /api/stripe/funded redirect.
   const jar = await cookies();
@@ -98,6 +111,17 @@ export default async function Dashboard() {
       {pal ? (
         <>
           <PalBadge username={pal.username} />
+          <Link
+            href="/chat"
+            className={[
+              "mt-6 flex items-center justify-center rounded-xl",
+              "border border-zinc-700 bg-zinc-900 px-4 py-3",
+              "text-sm font-medium text-white transition-colors",
+              "hover:border-zinc-500 hover:bg-zinc-800",
+            ].join(" ")}
+          >
+            Chat with {pal.username}
+          </Link>
           <BalanceCard balance={balance} />
           <PayoutCard enabled={acct.stripeConnectId != null} />
           <DocumentsSection documents={documents} principalId={pal.id} />
@@ -116,30 +140,8 @@ export default async function Dashboard() {
 
 /** Resolve documents for a pal, merging with system defaults. */
 async function resolveDocuments(principalId: string): Promise<DocumentData[]> {
-  const allDocs = await db
-    .select()
-    .from(document)
-    .where(eq(document.principalId, principalId))
-    .orderBy(desc(document.createdAt));
-
-  // Deduplicate to latest version per path.
-  const seen = new Set<string>();
-  const current = allDocs.filter((d) => {
-    if (seen.has(d.path)) return false;
-    seen.add(d.path);
-    return true;
-  });
-
-  // Convert to the Document shape expected by withDefaults.
-  const mapped = current.map((d) => ({
-    contents: d.content,
-    path: d.path,
-    priority: d.priority,
-    updatedAt: d.createdAt.toISOString(),
-    updatedBy: d.editedBy,
-  }));
-
-  const merged = withDefaults(mapped);
+  const docs = await currentDocuments(principalId);
+  const merged = withDefaults(docs);
 
   return merged
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
@@ -180,8 +182,8 @@ function PalBadge({ username }: { username: string }) {
 // –
 
 type ActivityEntry =
-  | { capability: string; createdAt: Date; input: unknown; kind: "log" }
-  | { amount: bigint; cost: bigint; createdAt: Date; kind: "usage"; resource: string };
+  | { capability: string; createdAt: string; input: unknown; kind: "log" }
+  | { cost: number; createdAt: string; detail: string; kind: "usage"; resource: string };
 
 /** Collapse capability input to a short human-readable summary. */
 function summarize(input: unknown): string {
@@ -198,6 +200,18 @@ function summarize(input: unknown): string {
     return `from ${obj.from}: ${obj.subject}`;
   }
   return JSON.stringify(input).slice(0, 120);
+}
+
+/** Format an ISO timestamp for display. Uses UTC to avoid hydration mismatch. */
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("en-US", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  });
 }
 
 function ActivityTable({ rows }: { rows: ActivityEntry[] }) {
@@ -217,47 +231,29 @@ function ActivityTable({ rows }: { rows: ActivityEntry[] }) {
       <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
         Activity
       </p>
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-xs uppercase tracking-wider text-zinc-500">
-              <th className="pb-3 pr-4 font-medium">Event</th>
-              <th className="pb-3 pr-4 font-medium">Detail</th>
-              <th className="pb-3 pr-4 font-medium">Cost</th>
-              <th className="pb-3 font-medium">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) =>
-              row.kind === "log" ? (
-                <tr key={i} className="border-b border-zinc-800/50">
-                  <td className="py-3 pr-4 font-mono text-xs">{row.capability}</td>
-                  <td className="max-w-sm truncate py-3 pr-4 text-zinc-400">
-                    {summarize(row.input)}
-                  </td>
-                  <td className="py-3 pr-4" />
-                  <td className="py-3 whitespace-nowrap text-zinc-500">
-                    {row.createdAt.toLocaleString()}
-                  </td>
-                </tr>
-              ) : (
-                <tr key={i} className="border-b border-zinc-800/50">
-                  <td className="py-3 pr-4 font-mono text-xs">{row.resource}</td>
-                  <td className="py-3 pr-4 tabular-nums text-zinc-400">
-                    {Number(row.amount).toLocaleString()} tokens
-                  </td>
-                  <td className="py-3 pr-4 tabular-nums">
-                    ${(Number(row.cost) / 1_000_000).toFixed(4)}
-                  </td>
-                  <td className="py-3 whitespace-nowrap text-zinc-500">
-                    {row.createdAt.toLocaleString()}
-                  </td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ul className="mt-4 space-y-1">
+        {rows.map((row, i) => (
+          <li
+            key={i}
+            className="flex items-baseline justify-between gap-4 py-2 border-b border-zinc-800/50 text-sm"
+          >
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-xs text-zinc-300">
+                {row.kind === "log" ? row.capability : row.resource}
+              </span>
+              <span className="ml-2 text-zinc-500 truncate">
+                {row.kind === "log" ? summarize(row.input) : row.detail}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 text-xs text-zinc-500">
+              {row.kind === "usage" && (
+                <span className="tabular-nums">${row.cost.toFixed(4)}</span>
+              )}
+              <time dateTime={row.createdAt}>{formatTime(row.createdAt)}</time>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

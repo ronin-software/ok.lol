@@ -2,12 +2,11 @@ import emailReceive from "@/capabilities/email-receive";
 import { getExecutionContext } from "@/capabilities/_execution-context";
 import { db } from "@/db";
 import { principal } from "@/db/schema";
+import { env } from "@/lib/env";
+import { resend } from "@/lib/resend";
 import { secret } from "@/lib/session";
 import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY!);
 
 /**
  * POST /webhooks/resend/email.received
@@ -35,7 +34,7 @@ export async function POST(req: Request) {
         timestamp: svixTimestamp,
       },
       payload: body,
-      webhookSecret: process.env.RESEND_WEBHOOK_SECRET!,
+      webhookSecret: env.RESEND_WEBHOOK_SECRET,
     });
   } catch {
     return new Response("Invalid signature", { status: 400 });

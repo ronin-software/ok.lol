@@ -59,11 +59,12 @@ function DocumentCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState(doc.content);
+  const [baseline, setBaseline] = useState(doc.content);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const dirty = content !== doc.content;
+  const dirty = content !== baseline;
 
   function handleSave() {
     setError("");
@@ -79,8 +80,7 @@ function DocumentCard({
         setError(result.error);
       } else {
         setSaved(true);
-        // Reset the baseline so "dirty" clears.
-        doc.content = content;
+        setBaseline(content);
       }
     });
   }

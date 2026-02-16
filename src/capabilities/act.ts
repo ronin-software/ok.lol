@@ -4,8 +4,8 @@ import { assert } from "@/lib/assert";
 import { computeCost } from "@/lib/pricing";
 import { debit } from "@/lib/tigerbeetle";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { Capability } from "@ok.lol/capability";
-import { generateText, stepCountIs } from "ai";
+import { convertToModelMessages, streamText, stepCountIs } from "ai";
+import type { UIMessage } from "ai";
 import { withDefaults } from "./_defaults";
 import type { OriginExecutionContext } from "./_execution-context";
 import { logCall } from "./_log";
@@ -13,82 +13,73 @@ import { assemblePrompt } from "./_prompt";
 import { makeTools, toolDirectory } from "./_tools";
 
 /**
- * The agent loop. Processes a message through multi-step inference,
- * calling tools as needed until the model is done or the step limit
- * is reached.
+ * The agent loop. Processes input through multi-step inference, calling
+ * tools as needed until the model finishes or the step limit is reached.
  *
- * Uses `@ai-sdk/anthropic` directly instead of the Vercel AI Gateway
- * because the gateway strips `type` from tool JSON schemas server-side,
- * breaking all tool calls. Switch to `gateway("anthropic/...")` from `ai`
- * once https://github.com/vercel/ai/issues/11869 is resolved.
+ * Transport-agnostic: returns a stream result that callers consume
+ * based on their needs:
+ *
+ * - Streaming (HTTP):     `result.toUIMessageStreamResponse()`
+ * - Non-streaming (email): `await result.text`
+ *
+ * Usage recording fires automatically in `onFinish`.
  */
-
-/** Default model ID (Anthropic provider format). */
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 
 /** Anthropic provider instance. */
 const anthropic = createAnthropic();
 
+/** Default model ID (Anthropic provider format). */
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+
 /** Hard ceiling on agentic steps to bound cost and latency. */
 const MAX_STEPS = 10;
 
-/** Input to the act capability. */
+/** Input to the agent loop. */
 type Input = {
+  /** UI messages for multi-turn chat. Converted to model messages internally. */
+  messages?: UIMessage[];
   /** Optional model override. */
   model?: string;
-  /** The message to process. */
-  prompt: string;
+  /** Single prompt for one-shot invocations. */
+  prompt?: string;
 };
 
-/** Output from the act capability. */
-type Output = {
-  /** The agent's final text response. */
-  text: string;
-};
+/** Runs the agent loop. Returns a stream result for the caller to consume. */
+export default async function act(ectx: OriginExecutionContext, input: Input) {
+  assert(
+    input.prompt != null || input.messages != null,
+    "prompt or messages required",
+  );
+  await logCall(ectx, "act", input);
+  const modelId = input.model ?? DEFAULT_MODEL;
 
-/** Processes a message through the agent loop. */
-const act: Capability<OriginExecutionContext, Input, Output> = {
-  available: async () => true,
+  // Assemble context.
+  const documents = withDefaults(ectx.principal.documents);
+  const system = assemblePrompt({
+    caller: ectx.caller,
+    capabilities: toolDirectory,
+    credits: ectx.principal.credits,
+    documents,
+    username: ectx.principal.username,
+  });
+  const tools = makeTools(ectx);
 
-  async call(ectx, input) {
-    assert(input.prompt.length > 0, "prompt must be non-empty");
-    await logCall(ectx, "act", input);
-    const modelId = input.model ?? DEFAULT_MODEL;
+  // Convert UI messages to model messages, or use prompt directly.
+  const messageInput = input.messages
+    ? { messages: await convertToModelMessages(input.messages) }
+    : { prompt: input.prompt! };
 
-    // Assemble context.
-    const documents = withDefaults(ectx.principal.documents);
-    const system = assemblePrompt({
-      caller: ectx.caller,
-      capabilities: toolDirectory,
-      credits: ectx.principal.credits,
-      documents,
-      username: ectx.principal.username,
-    });
-    const tools = makeTools(ectx);
-
-    // Run the agent loop.
-    const result = await generateText({
-      model: anthropic(modelId),
-      prompt: input.prompt,
-      stopWhen: stepCountIs(MAX_STEPS),
-      system,
-      tools,
-    });
-
-    // Record usage and debit credits.
-    await recordUsage(ectx, modelId, result.totalUsage);
-
-    return { text: result.text };
-  },
-
-  description: "Processes a message and takes actions until completion",
-  inputSchema: {},
-  name: "act",
-  outputSchema: {},
-  setup: async () => {},
-};
-
-export default act;
+  return streamText({
+    model: anthropic(modelId),
+    ...messageInput,
+    stopWhen: stepCountIs(MAX_STEPS),
+    system,
+    tools,
+    onFinish: async ({ totalUsage }) => {
+      await recordUsage(ectx, modelId, totalUsage);
+    },
+  });
+}
 
 // –
 // Usage
@@ -96,7 +87,6 @@ export default act;
 
 /** Model ID to pricing resource prefix. */
 function pricingPrefix(model: string): string {
-  // "anthropic/claude-sonnet-4.5" → "claude-sonnet-4.5"
   const slash = model.lastIndexOf("/");
   return slash >= 0 ? model.slice(slash + 1) : model;
 }

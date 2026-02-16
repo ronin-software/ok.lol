@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { document, hire, listing, principal } from "@/db/schema";
+import { currentDocuments } from "@/db/documents";
+import { hire, listing, principal } from "@/db/schema";
 import { secret } from "@/lib/session";
 import { available, lookupAccount } from "@/lib/tigerbeetle";
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { jwtVerify } from "jose";
 
 /** A principal's document, resolved from the DB or injected as a system default. */
@@ -88,32 +89,12 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
     .limit(1);
   if (!row) throw new Error(`Principal not found: ${claims.sub}`);
 
-  // Resolve documents (latest version per kind)
-  const allDocs = await db
-    .select()
-    .from(document)
-    .where(eq(document.principalId, row.id))
-    .orderBy(desc(document.createdAt));
-
-  const seen = new Set<string>();
-  const currentDocs = allDocs.filter((d) => {
-    if (seen.has(d.path)) return false;
-    seen.add(d.path);
-    return true;
-  });
-
-  // Resolve credits from TigerBeetle
-  const tbAccount = await lookupAccount(BigInt(row.accountId));
+  // Resolve documents and credits in parallel.
+  const [contextDocs, tbAccount] = await Promise.all([
+    currentDocuments(row.id),
+    lookupAccount(BigInt(row.accountId)),
+  ]);
   const credits = tbAccount ? available(tbAccount) : 0n;
-
-  // Build base documents.
-  const contextDocs: Document[] = currentDocs.map((d) => ({
-    contents: d.content,
-    path: d.path,
-    priority: d.priority,
-    updatedAt: d.createdAt.toISOString(),
-    updatedBy: d.editedBy,
-  }));
 
   // Resolve caller if this is a hire execution
   let caller: OriginExecutionContext["caller"];

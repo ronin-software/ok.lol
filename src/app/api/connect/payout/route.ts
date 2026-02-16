@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { account, payout } from "@/db/schema";
-import { identify } from "@/lib/auth";
 import { error } from "@/lib/http";
+import { verify } from "@/lib/session";
 import {
   getConnectStatus,
   microToCents,
@@ -24,7 +24,7 @@ const Body = z.object({ amount: z.number().positive() });
  * Body: { amount: number } — amount in micro-USD.
  */
 export async function POST(req: Request) {
-  const accountId = await identify();
+  const accountId = await verify();
   if (!accountId) return error(401, "Unauthorized");
 
   const parsed = Body.safeParse(await req.json());

@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
+import { verify } from "@/lib/session";
 
-export default function RootPage() {
-  redirect("/sign-up");
+/** Redirect to dashboard if authenticated, sign-up if not. */
+export default async function RootPage() {
+  const accountId = await verify();
+  redirect(accountId ? "/dashboard" : "/sign-up");
 }

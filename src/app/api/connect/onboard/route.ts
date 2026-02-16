@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { account } from "@/db/schema";
-import { identify } from "@/lib/auth";
 import { env } from "@/lib/env";
+import { verify } from "@/lib/session";
 import { error } from "@/lib/http";
 import {
   createAccountLink,
@@ -18,7 +18,7 @@ import {
  * Otherwise returns `{ url }` pointing to Stripe's hosted onboarding.
  */
 export async function POST() {
-  const accountId = await identify();
+  const accountId = await verify();
   if (!accountId) return error(401, "Unauthorized");
 
   const acct = await db

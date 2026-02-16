@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { document } from "@/db/schema";
 import { assert } from "@/lib/assert";
 import { tool } from "ai";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { OriginExecutionContext } from "./_execution-context";
 import emailSend from "./email-send";
@@ -90,13 +90,18 @@ function readDocument(ectx: OriginExecutionContext) {
     execute: async ({ path }) => {
       assert(path.length > 0, "path must be non-empty");
 
-      // Latest version per (principalId, path): ordered desc, first match wins.
-      const rows = await db
+      // Latest version for this (principalId, path) pair.
+      const [match] = await db
         .select()
         .from(document)
-        .where(eq(document.principalId, ectx.principal.id))
-        .orderBy(desc(document.createdAt));
-      const match = rows.find((r) => r.path === path);
+        .where(
+          and(
+            eq(document.principalId, ectx.principal.id),
+            eq(document.path, path),
+          ),
+        )
+        .orderBy(desc(document.createdAt))
+        .limit(1);
 
       if (!match) return { error: `No document at path "${path}"` };
 

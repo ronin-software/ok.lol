@@ -17,6 +17,15 @@ export const metadata: Metadata = {
   title: "ok.lol",
 };
 
+/** Mobile-native viewport: full-screen, safe-area-aware, no zoom. */
+export const viewport = {
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover" as const,
+  width: "device-width",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
