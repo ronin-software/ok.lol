@@ -1,13 +1,14 @@
-import type { Capability } from "@ok.lol/capability";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import { db } from "@/db";
 import { usage } from "@/db/schema";
 import { assert } from "@/lib/assert";
 import { computeCost } from "@/lib/pricing";
 import { debit } from "@/lib/tigerbeetle";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import type { Capability } from "@ok.lol/capability";
 import { generateText, stepCountIs } from "ai";
-import type { OriginExecutionContext } from "./_execution-context";
 import { withDefaults } from "./_defaults";
+import type { OriginExecutionContext } from "./_execution-context";
+import { logCall } from "./_log";
 import { assemblePrompt } from "./_prompt";
 import { makeTools, toolDirectory } from "./_tools";
 
@@ -51,6 +52,7 @@ const act: Capability<OriginExecutionContext, Input, Output> = {
 
   async call(ectx, input) {
     assert(input.prompt.length > 0, "prompt must be non-empty");
+    await logCall(ectx, "act", input);
     const modelId = input.model ?? DEFAULT_MODEL;
 
     // Assemble context.

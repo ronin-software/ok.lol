@@ -2,6 +2,7 @@ import type { Capability } from "@ok.lol/capability";
 import { env } from "@/lib/env";
 import { Resend, type CreateEmailOptions } from "resend";
 import type { OriginExecutionContext } from "./_execution-context";
+import { logCall } from "./_log";
 
 // Resend SDK
 const resend = new Resend(env.RESEND_API_KEY);
@@ -13,6 +14,7 @@ type Input = Omit<CreateEmailOptions, "from">;
 const emailSend: Capability<OriginExecutionContext, Input, void> = {
   available: async () => true,
   async call(ectx, email) {
+    await logCall(ectx, "email-send", email);
     const from = `${ectx.principal.username}@ok.lol`;
     // Cast needed: Omit over a discriminated union loses branch structure.
     await resend.emails.send({ ...email, from } as CreateEmailOptions);

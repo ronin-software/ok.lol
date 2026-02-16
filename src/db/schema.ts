@@ -70,6 +70,23 @@ export const document = pgTable("document", {
 });
 
 // –
+// Log
+// –
+
+/** A record of a capability invocation on the origin. */
+export const log = pgTable("log", {
+  /** Origin capability name (e.g. "act", "email-send"). */
+  capability: text("capability").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** JSON-serializable input passed to the capability. */
+  input: jsonb("input").notNull(),
+  principalId: uuid("principal_id")
+    .references(() => principal.id)
+    .notNull(),
+});
+
+// –
 // Listing
 // –
 

@@ -1,6 +1,7 @@
 import type { Capability } from "@ok.lol/capability";
 import type { GetReceivingEmailResponseSuccess } from "resend";
 import type { OriginExecutionContext } from "./_execution-context";
+import { logCall } from "./_log";
 import act from "./act";
 
 /**
@@ -14,6 +15,7 @@ const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponse
   available: async () => true,
 
   async call(ectx, email) {
+    await logCall(ectx, "email-receive", { from: email.from, subject: email.subject, text: email.text });
     const prompt = [
       "You received an email. Read it carefully and reply appropriately if needed. If the email is spam, email me (danscan@ronindevs.com) and let me know. If you take an action on a a received email (other than spam), reply back let the sender know. Be mindful of whether the email was sent by me or someone else. You can email me to let me know when you receive an email and it warrants my attention, and you can reply to conversational emails sent by others.",
       "",
