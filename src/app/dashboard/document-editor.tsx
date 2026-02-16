@@ -1,8 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveDocument } from "./actions";
-import { BUTTON_OUTLINE, CARD } from "./styles";
+import { BUTTON_OUTLINE, BUTTON_PRIMARY, CARD, INPUT, LABEL } from "./styles";
 
 /** Resolved document passed from the server component. */
 export interface DocumentData {
@@ -40,6 +41,7 @@ export default function DocumentsSection({ documents, principalId }: Props) {
           principalId={principalId}
         />
       ))}
+      <NewDocumentCard principalId={principalId} />
     </div>
   );
 }
@@ -132,6 +134,127 @@ function DocumentCard({
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// –
+// New document
+// –
+
+const TEXTAREA = [
+  "w-full rounded-lg border border-zinc-800 bg-zinc-950",
+  "p-3 font-mono text-sm text-zinc-300",
+  "placeholder-zinc-600 outline-none",
+  "focus:border-zinc-600 transition-colors resize-y",
+].join(" ");
+
+function NewDocumentCard({ principalId }: { principalId: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [path, setPath] = useState("");
+  const [priority, setPriority] = useState("0");
+  const [content, setContent] = useState("");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const valid = path.trim().length > 0 && content.trim().length > 0;
+
+  function reset() {
+    setPath("");
+    setPriority("0");
+    setContent("");
+    setError("");
+  }
+
+  function handleCreate() {
+    setError("");
+    startTransition(async () => {
+      const result = await saveDocument(
+        principalId,
+        path.trim(),
+        content,
+        Number(priority) || 0,
+      );
+      if (result.error) {
+        setError(result.error);
+      } else {
+        reset();
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className={CARD}>
+      {open ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-white">New document</p>
+            <button
+              onClick={() => { reset(); setOpen(false); }}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              cancel
+            </button>
+          </div>
+
+          {/* Path + priority on one row */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className={LABEL}>Path</label>
+              <input
+                type="text"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder="e.g. skills/cooking"
+                className={`mt-1 ${INPUT}`}
+              />
+            </div>
+            <div className="w-24">
+              <label className={LABEL}>Priority</label>
+              <input
+                type="number"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className={`mt-1 ${INPUT}`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={LABEL}>Content</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Document body..."
+              rows={8}
+              className={`mt-1 ${TEXTAREA}`}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCreate}
+              disabled={!valid || pending}
+              className={BUTTON_PRIMARY}
+            >
+              {pending ? "Creating..." : "Create"}
+            </button>
+            {error && (
+              <span className="text-xs text-red-400">{error}</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center justify-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          + Add document
+        </button>
       )}
     </div>
   );
