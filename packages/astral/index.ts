@@ -2,6 +2,7 @@ export { connect } from "./connect";
 export type { ConnectOptions, Remote } from "./connect";
 export { handle } from "./handle";
 export type { Callable } from "./handle";
+export * as hmac from "./hmac";
 export { serve } from "./serve";
 export type { ServeOptions } from "./serve";
 

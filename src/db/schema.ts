@@ -199,3 +199,22 @@ export const usage = pgTable("usage", {
   /** Payable resource key (e.g. "claude-sonnet-4.5:input", "resend:send") */
   resource: text("resource").notNull(),
 });
+
+// –
+// Worker
+// –
+
+/** A registered worker endpoint running capabilities on user hardware. */
+export const worker = pgTable("worker", {
+  accountId: text("account_id")
+    .references(() => account.id)
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Human-readable label (e.g. "my-laptop"). */
+  name: text("name").notNull(),
+  /** HMAC-SHA256 signing key (hex-encoded, 32 bytes). */
+  secret: text("secret").notNull(),
+  /** HTTP endpoint reachable from the origin. */
+  url: text("url").notNull(),
+});

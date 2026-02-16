@@ -56,4 +56,4 @@ export const bash = {
 
   inputSchema: zodToJsonSchema(inputSchema),
   outputSchema: zodToJsonSchema(outputSchema),
-} satisfies Capability<CallArgs, CallResult>;
+} satisfies Capability<void, CallArgs, CallResult>;

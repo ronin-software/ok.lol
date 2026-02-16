@@ -11,6 +11,7 @@ import type { OriginExecutionContext } from "./_execution-context";
 import { logCall } from "./_log";
 import { assemblePrompt } from "./_prompt";
 import { makeTools, toolDirectory } from "./_tools";
+import * as workers from "./_workers";
 
 /**
  * The agent loop. Processes input through multi-step inference, calling
@@ -53,16 +54,20 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   await logCall(ectx, "act", input);
   const modelId = input.model ?? DEFAULT_MODEL;
 
+  // Discover online workers and build remote tools.
+  const endpoints = await workers.discover(ectx.principal.accountId);
+  const remote = workers.makeTools(endpoints);
+
   // Assemble context.
   const documents = withDefaults(ectx.principal.documents);
   const system = assemblePrompt({
     caller: ectx.caller,
-    capabilities: toolDirectory,
+    capabilities: [...toolDirectory, ...remote.directory],
     credits: ectx.principal.credits,
     documents,
     username: ectx.principal.username,
   });
-  const tools = makeTools(ectx);
+  const tools = { ...makeTools(ectx), ...remote.tools };
 
   // Convert UI messages to model messages, or use prompt directly.
   const messageInput = input.messages

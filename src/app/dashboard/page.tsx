@@ -1,7 +1,7 @@
 import { withDefaults } from "@/capabilities/_defaults";
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
-import { account, log, principal, usage as usageTable } from "@/db/schema";
+import { account, log, principal, usage as usageTable, worker } from "@/db/schema";
 import { verify } from "@/lib/session";
 import * as tb from "@/lib/tigerbeetle";
 import { desc, eq } from "drizzle-orm";
@@ -15,6 +15,7 @@ import DocumentsSection from "./document-editor";
 import FundedBanner from "./funded-banner";
 import PayoutCard from "./payout-card";
 import SignOut from "./sign-out";
+import Workers from "./workers";
 
 export default async function Dashboard() {
   const accountId = await verify();
@@ -98,6 +99,24 @@ export default async function Dashboard() {
     documents = await resolveDocuments(pal.id);
   }
 
+  // Fetch registered workers for the account.
+  const workerRows = await db
+    .select({
+      createdAt: worker.createdAt,
+      id: worker.id,
+      name: worker.name,
+      secret: worker.secret,
+      url: worker.url,
+    })
+    .from(worker)
+    .where(eq(worker.accountId, accountId))
+    .orderBy(desc(worker.createdAt));
+
+  const workerData = workerRows.map((w) => ({
+    ...w,
+    createdAt: w.createdAt.toISOString(),
+  }));
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
       {funded && <FundedBanner />}
@@ -124,6 +143,7 @@ export default async function Dashboard() {
           </Link>
           <BalanceCard balance={balance} />
           <PayoutCard enabled={acct.stripeConnectId != null} />
+          <Workers workers={workerData} />
           <DocumentsSection documents={documents} principalId={pal.id} />
           <ActivityTable rows={activity} />
         </>
