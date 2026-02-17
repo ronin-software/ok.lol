@@ -9,6 +9,8 @@
  *   RELEASE_SIGNING_KEY — hex-encoded Ed25519 private key (DER/PKCS8)
  *   VERSION             — semver to embed (falls back to package.json)
  *   GITHUB_REPO         — owner/repo for download URLs (default: ronin-software/ok.lol)
+ *   TUNNEL_HOST         — tunnel relay domain (default: w.ok.lol)
+ *   TUNNEL_PORT         — tunnel relay SSH port (default: 2222)
  */
 
 import { mkdir, readdir } from "node:fs/promises";
@@ -36,6 +38,8 @@ const pkg = await Bun.file(
 const version = process.env.VERSION ?? pkg.version;
 const repo = process.env.GITHUB_REPO ?? "ronin-software/ok.lol";
 const signingKey = process.env.RELEASE_SIGNING_KEY;
+const tunnelHost = process.env.TUNNEL_HOST ?? "w.ok.lol";
+const tunnelPort = process.env.TUNNEL_PORT ?? "2222";
 
 if (!signingKey) {
   console.error("RELEASE_SIGNING_KEY is required");
@@ -64,6 +68,10 @@ for (const target of TARGETS) {
     target,
     "--define",
     `WORKERD_VERSION="${version}"`,
+    "--define",
+    `TUNNEL_HOST="${tunnelHost}"`,
+    "--define",
+    `TUNNEL_PORT="${tunnelPort}"`,
     "--outfile",
     outpath,
     new URL("./src/workerd.ts", import.meta.url).pathname,

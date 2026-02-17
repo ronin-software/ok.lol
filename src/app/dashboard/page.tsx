@@ -9,6 +9,7 @@ import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { probeWorkers } from "./actions";
 import BalanceCard from "./balance-card";
 import CreatePal from "./create-pal";
 import type { DocumentData } from "./document-editor";
@@ -100,22 +101,26 @@ export default async function Dashboard() {
     documents = await resolveDocuments(pal.id);
   }
 
-  // Fetch registered workers for the account.
-  const workerRows = await db
-    .select({
-      createdAt: worker.createdAt,
-      id: worker.id,
-      name: worker.name,
-      secret: worker.secret,
-      url: worker.url,
-    })
-    .from(worker)
-    .where(eq(worker.accountId, accountId))
-    .orderBy(desc(worker.createdAt));
+  // Fetch registered workers and probe for live names in parallel.
+  const [workerRows, probeNames] = await Promise.all([
+    db
+      .select({
+        createdAt: worker.createdAt,
+        id: worker.id,
+        name: worker.name,
+        secret: worker.secret,
+        url: worker.url,
+      })
+      .from(worker)
+      .where(eq(worker.accountId, accountId))
+      .orderBy(desc(worker.createdAt)),
+    probeWorkers(),
+  ]);
 
   const workerData = workerRows.map((w) => ({
     ...w,
     createdAt: w.createdAt.toISOString(),
+    name: probeNames[w.id] ?? w.name,
   }));
 
   return (

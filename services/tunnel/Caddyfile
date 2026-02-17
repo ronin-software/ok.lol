@@ -1,0 +1,13 @@
+# Gate all HTTP traffic behind a shared secret.
+# Only the origin server knows TUNNEL_KEY — random internet
+# requests get 403 before any bytes hit the tunnel.
+
+:80 {
+	@authorized header X-Tunnel-Key {env.TUNNEL_KEY}
+
+	handle @authorized {
+		reverse_proxy localhost:8080
+	}
+
+	respond 403
+}

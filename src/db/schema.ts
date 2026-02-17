@@ -211,10 +211,10 @@ export const worker = pgTable("worker", {
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Human-readable label (e.g. "my-laptop"). */
-  name: text("name").notNull(),
+  /** Hostname reported by the worker. Null until first probe. */
+  name: text("name"),
   /** HMAC-SHA256 signing key (hex-encoded, 32 bytes). */
   secret: text("secret").notNull(),
-  /** HTTP endpoint reachable from the origin. */
+  /** HTTP endpoint reachable from the origin (auto-populated). */
   url: text("url").notNull(),
 });

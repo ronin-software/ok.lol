@@ -4,13 +4,15 @@
  *
  * Exposes local capabilities over HTTP with HMAC-SHA256 request signing.
  * Every inbound POST must carry a valid X-Signature-256 header.
- * GET / returns the list of available capabilities (no auth).
+ * GET / returns the capability directory and hostname (no auth).
  *
  * Environment:
- *   WORKER_SECRET  — 256-bit hex-encoded signing key (required)
- *   PORT           — Listen port (default 7420)
+ *   WORKER_TOKEN  — "<id>:<secret>" from the dashboard (required)
+ *   WORKER_NAME   — Override reported hostname (default: os.hostname())
+ *   PORT          — Listen port (default 7420)
  */
 
+import { hostname } from "node:os";
 import {
   handle,
   hmac,
@@ -20,6 +22,7 @@ import {
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
 import * as caps from "./capabilities";
+import { start as startTunnel } from "./tunnel";
 import { start as startUpdater } from "./update";
 
 // Baked in at compile time by `bun build --define`.
@@ -41,11 +44,19 @@ function log(tag: string, ...args: string[]) {
 // Configuration
 // –
 
-const SECRET = process.env.WORKER_SECRET;
-if (!SECRET) {
-  console.error("WORKER_SECRET is required");
+const TOKEN = process.env.WORKER_TOKEN;
+if (!TOKEN || !TOKEN.includes(":")) {
+  console.error("WORKER_TOKEN is required (format: <id>:<secret>)");
   process.exit(1);
 }
+
+const [WORKER_ID, SECRET] = [
+  TOKEN.slice(0, TOKEN.indexOf(":")),
+  TOKEN.slice(TOKEN.indexOf(":") + 1),
+];
+
+/** Reported name — hostname by default, overridable via WORKER_NAME. */
+const NAME = process.env.WORKER_NAME ?? hostname();
 
 const PORT = Number(process.env.PORT ?? 7420);
 
@@ -78,6 +89,7 @@ Bun.serve({
           inputSchema: z.toJSONSchema(c.inputSchema),
           outputSchema: z.toJSONSchema(c.outputSchema),
         })),
+        name: NAME,
       });
     }
     if (method !== "POST") {
@@ -130,10 +142,11 @@ Bun.serve({
   },
 });
 
-console.log(`workerd v${VERSION} :${PORT}`);
+console.log(`workerd v${VERSION} :${PORT} (${NAME})`);
 console.log(`  capabilities: ${Object.keys(capabilities).join(", ")}`);
 
-// Start background auto-updater.
+// Start background services.
+startTunnel(WORKER_ID, PORT);
 startUpdater(VERSION, RELEASE_PUBLIC_KEY);
 
 // –

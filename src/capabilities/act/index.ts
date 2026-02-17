@@ -62,7 +62,10 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   // Build origin tools and discover remote worker tools.
   const origin = makeTools(ectx);
   const endpoints = await workers.discover(ectx.principal.accountId);
-  const remote = workers.makeTools(endpoints);
+  const remote = workers.makeTools(endpoints, {
+    accountId: ectx.principal.accountId,
+    hireId: ectx.caller?.hireId,
+  });
 
   // Assemble context.
   const documents = withDefaults(ectx.principal.documents);
