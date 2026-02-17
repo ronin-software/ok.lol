@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 
 /**
- * POST /webhooks/resend/email.received
+ * POST /api/resend/webhook
  *
  * Receives inbound email events from Resend. Verifies the Svix
  * signature, resolves the target principal, fetches the email body,
