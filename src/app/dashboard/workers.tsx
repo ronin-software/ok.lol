@@ -112,8 +112,13 @@ function SecretBanner({
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="mt-3 overflow-x-auto rounded bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
-        {`WORKER_SECRET=${secret} bun packages/worker/workerd.ts`}
+      <p className="mt-3 text-xs text-zinc-500">Install:</p>
+      <pre className="mt-1 overflow-x-auto rounded bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+        {`curl -fsSL ${process.env.NEXT_PUBLIC_BASE_URL ?? "https://ok.lol"}/install | bash`}
+      </pre>
+      <p className="mt-2 text-xs text-zinc-500">Run:</p>
+      <pre className="mt-1 overflow-x-auto rounded bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+        {`WORKER_SECRET=${secret} workerd`}
       </pre>
       <button
         onClick={onDismiss}

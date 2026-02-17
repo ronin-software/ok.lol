@@ -1,8 +1,12 @@
 {
   "name": "@ok.lol/worker",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "module": "index.ts",
+  "module": "src/workerd.ts",
+  "scripts": {
+    "build": "bun build.ts"
+  },
   "dependencies": {
     "@ok.lol/astral": "workspace:*",
     "@ok.lol/capability": "workspace:*",

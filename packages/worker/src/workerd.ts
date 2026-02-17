@@ -20,6 +20,16 @@ import {
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
 import * as caps from "./capabilities";
+import { start as startUpdater } from "./update";
+
+// Baked in at compile time by `bun build --define`.
+declare const WORKERD_VERSION: string;
+
+/** Embedded version. Falls back to "dev" for unbundled runs. */
+const VERSION = typeof WORKERD_VERSION !== "undefined" ? WORKERD_VERSION : "dev";
+
+/** Ed25519 public key for release signing (DER/SPKI, hex-encoded). */
+const RELEASE_PUBLIC_KEY = "302a300506032b6570032100445b6e6f40d50345b510a21fa7b46cca473be3e21fa668396cc72f7947fd3f6a";
 
 /** Timestamped log line. */
 function log(tag: string, ...args: string[]) {
@@ -120,8 +130,11 @@ Bun.serve({
   },
 });
 
-console.log(`workerd :${PORT}`);
+console.log(`workerd v${VERSION} :${PORT}`);
 console.log(`  capabilities: ${Object.keys(capabilities).join(", ")}`);
+
+// Start background auto-updater.
+startUpdater(VERSION, RELEASE_PUBLIC_KEY);
 
 // –
 // Response formatting

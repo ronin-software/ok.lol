@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# ok.lol worker daemon installer.
+#
+# Usage:
+#   curl -fsSL https://ok.lol/install | bash
+#
+# Installs the latest workerd binary to ~/.ok.lol/bin and adds it to PATH.
+
+set -euo pipefail
+
+REPO="ronin-software/ok.lol"
+INSTALL_DIR="$HOME/.ok.lol/bin"
+
+# –
+# Platform detection
+# –
+
+detect_platform() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+
+  case "$os" in
+    Darwin) os="darwin" ;;
+    Linux)  os="linux"  ;;
+    *)
+      echo "error: unsupported OS: $os" >&2
+      exit 1
+      ;;
+  esac
+
+  case "$arch" in
+    arm64 | aarch64) arch="arm64" ;;
+    x86_64)          arch="x64"   ;;
+    *)
+      echo "error: unsupported architecture: $arch" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "${os}-${arch}"
+}
+
+# –
+# Latest release
+# –
+
+latest_tag() {
+  local url="https://api.github.com/repos/${REPO}/releases"
+  local tag
+
+  tag="$(
+    curl -fsSL "$url?per_page=10" \
+      -H "Accept: application/vnd.github+json" \
+    | grep -o '"tag_name": *"worker-v[^"]*"' \
+    | head -1 \
+    | cut -d'"' -f4
+  )"
+
+  if [ -z "$tag" ]; then
+    echo "error: no worker release found" >&2
+    exit 1
+  fi
+
+  echo "$tag"
+}
+
+# –
+# Install
+# –
+
+main() {
+  local platform tag artifact_url target
+
+  platform="$(detect_platform)"
+  echo "detected platform: $platform"
+
+  tag="$(latest_tag)"
+  echo "latest release: $tag"
+
+  artifact_url="https://github.com/${REPO}/releases/download/${tag}/workerd-${platform}"
+  target="${INSTALL_DIR}/workerd"
+
+  mkdir -p "$INSTALL_DIR"
+
+  echo "downloading workerd..."
+  curl -fsSL "$artifact_url" -o "$target"
+  chmod +x "$target"
+
+  echo "installed to $target"
+
+  # Add to PATH if not already present.
+  add_to_path
+
+  echo ""
+  echo "workerd installed! Run it with:"
+  echo ""
+  echo "  WORKER_SECRET=<your-secret> workerd"
+  echo ""
+  echo "Create a worker at https://ok.lol/dashboard to get your secret."
+}
+
+# –
+# PATH
+# –
+
+add_to_path() {
+  # Already on PATH — nothing to do.
+  if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+    return
+  fi
+
+  local line="export PATH=\"${INSTALL_DIR}:\$PATH\""
+  local profile=""
+
+  # Detect shell profile.
+  case "${SHELL:-}" in
+    */zsh)  profile="$HOME/.zshrc"     ;;
+    */bash)
+      if [ -f "$HOME/.bash_profile" ]; then
+        profile="$HOME/.bash_profile"
+      else
+        profile="$HOME/.bashrc"
+      fi
+      ;;
+    */fish)
+      # Fish uses a different syntax.
+      local fish_conf="$HOME/.config/fish/conf.d"
+      mkdir -p "$fish_conf"
+      echo "set -gx PATH ${INSTALL_DIR} \$PATH" > "$fish_conf/ok-lol.fish"
+      echo "added ${INSTALL_DIR} to PATH (fish)"
+      return
+      ;;
+    *)
+      echo "add ${INSTALL_DIR} to your PATH manually"
+      return
+      ;;
+  esac
+
+  if [ -n "$profile" ]; then
+    echo "" >> "$profile"
+    echo "# ok.lol worker daemon" >> "$profile"
+    echo "$line" >> "$profile"
+    echo "added ${INSTALL_DIR} to PATH in $profile"
+    # shellcheck disable=SC1090
+    source "$profile" 2>/dev/null || true
+  fi
+}
+
+main

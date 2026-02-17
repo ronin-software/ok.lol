@@ -1,0 +1,69 @@
+name: Release workerd
+
+on:
+  push:
+    tags:
+      - "worker-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install
+
+      # Derive version from tag or manual input.
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # Strip "worker-v" prefix from tag.
+            echo "value=${GITHUB_REF_NAME#worker-v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Sync version into package.json so the build script reads it.
+      - name: Set version
+        working-directory: packages/worker
+        run: |
+          bun -e "
+            const pkg = await Bun.file('package.json').json();
+            pkg.version = '${{ steps.version.outputs.value }}';
+            await Bun.write('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Build
+        working-directory: packages/worker
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: bun build.ts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="worker-v${{ steps.version.outputs.value }}"
+
+          # Create tag for manual dispatches.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+          gh release create "$TAG" \
+            --title "workerd ${{ steps.version.outputs.value }}" \
+            --generate-notes \
+            packages/worker/dist/*
