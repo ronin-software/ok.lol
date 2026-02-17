@@ -3,6 +3,7 @@
     // Environment
     "target": "ESNext",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["bun-types"],
     "module": "Preserve",
     "moduleDetection": "force",
     "jsx": "react-jsx",
@@ -39,5 +40,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "services"]
 }

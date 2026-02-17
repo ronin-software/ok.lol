@@ -44,18 +44,15 @@ export async function verify(
 
 const encoder = new TextEncoder();
 
-function encode(s: string): Uint8Array {
+function encode(s: string) {
   return encoder.encode(s);
 }
 
-function hex(bytes: Uint8Array): string {
+function hex(bytes: Uint8Array<ArrayBuffer>) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function importKey(
-  secret: string,
-  usages: KeyUsage[],
-): Promise<CryptoKey> {
+function importKey(secret: string, usages: KeyUsage[]) {
   return crypto.subtle.importKey(
     "raw",
     unhex(secret),
@@ -65,7 +62,7 @@ function importKey(
   );
 }
 
-function unhex(h: string): Uint8Array {
+function unhex(h: string) {
   const bytes = new Uint8Array(h.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);

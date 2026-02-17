@@ -1,14 +1,20 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { getToolName, isToolUIPart } from "ai";
+import {
+  DefaultChatTransport,
+  type DynamicToolUIPart,
+  getToolName,
+  isToolUIPart,
+  type ToolUIPart,
+} from "ai";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+const transport = new DefaultChatTransport({ api: "/api/chat" });
+
 export default function Chat() {
-  const { error, messages, sendMessage, status } = useChat({
-    api: "/api/chat",
-  });
+  const { error, messages, sendMessage, status } = useChat({ transport });
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -121,15 +127,16 @@ export default function Chat() {
 
 type UIMessage = ReturnType<typeof useChat>["messages"][number];
 type Part = UIMessage["parts"][number];
+type ToolPart = DynamicToolUIPart | ToolUIPart;
 
 function MessageBubble({ message }: { message: UIMessage }) {
   const isUser = message.role === "user";
 
   // Classify parts for layout decisions.
   const textParts: Array<{ i: number; text: string }> = [];
-  const toolParts: Array<{ i: number; part: Part }> = [];
+  const toolParts: Array<{ i: number; part: ToolPart }> = [];
   for (let i = 0; i < message.parts.length; i++) {
-    const part = message.parts[i];
+    const part = message.parts[i]!;
     if (part.type === "text" && part.text.length > 0) {
       textParts.push({ i, text: part.text });
     } else if (isToolUIPart(part)) {
@@ -183,10 +190,10 @@ const toolLabels: Record<string, { active: string; done: string }> = {
   write_document: { active: "Writing document",  done: "Wrote document" },
 };
 
-function ToolChip({ part }: { part: Part }) {
+function ToolChip({ part }: { part: ToolPart }) {
   const name = getToolName(part);
   const done = part.state === "output-available";
-  const errored = part.state === "error";
+  const errored = part.state === "output-error";
   const labels = toolLabels[name];
   const label = errored
     ? `${labels?.active ?? name} failed`
