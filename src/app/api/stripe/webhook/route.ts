@@ -45,10 +45,11 @@ export async function POST(req: Request) {
 
     // Create principal if this checkout was a pal registration.
     const username = session.metadata?.username;
-    if (username) {
+    const name = session.metadata?.name;
+    if (username && name) {
       await db
         .insert(principal)
-        .values({ accountId, username })
+        .values({ accountId, name, username })
         .onConflictDoNothing();
     }
   }

@@ -34,6 +34,8 @@ export type PromptOptions = {
   domain: string;
   /** Principal's documents (already merged with defaults). */
   documents: Document[];
+  /** Display name. */
+  name: string;
   /** Principal's username. */
   username: string;
 };
@@ -73,15 +75,17 @@ export function assemblePrompt(options: PromptOptions): string {
 
 /** Runtime context section: who you are, credit balance, time, caller. */
 function buildPreamble(options: PromptOptions): string {
+  const email = `${options.username}@${options.domain}`;
   const lines = [
-    `You are ${options.username}@${options.domain}, an always-on AI principal.`,
+    `You are ${options.name} (${email}), an always-on AI principal.`,
     `Credits: ${options.credits} micro-USD.`,
     `Time: ${new Date().toISOString()}.`,
   ];
 
   if (options.caller) {
+    const callerEmail = `${options.caller.username}@${options.domain}`;
     lines.push(
-      `You were hired by ${options.caller.username}@${options.domain} (hire ${options.caller.hireId}).`,
+      `You were hired by ${options.caller.name} (${callerEmail}) (hire ${options.caller.hireId}).`,
     );
   }
 

@@ -33,10 +33,11 @@ export async function GET(req: Request) {
 
       // Create principal if this was a pal registration.
       const username = session.metadata?.username;
-      if (sessionAccountId === accountId && username) {
+      const name = session.metadata?.name;
+      if (sessionAccountId === accountId && username && name) {
         await db
           .insert(principal)
-          .values({ accountId, username })
+          .values({ accountId, name, username })
           .onConflictDoNothing();
       }
     } catch (err) {

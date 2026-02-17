@@ -6,12 +6,13 @@ import { BUTTON_PRIMARY as BUTTON, CARD, INPUT, LABEL } from "./styles";
 const domain = process.env.NEXT_PUBLIC_EMAIL_DOMAIN ?? "ok.lol";
 
 export default function CreatePal() {
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const name = username.toLowerCase().trim();
-  const valid = name.length >= 4;
+  const handle = username.toLowerCase().trim();
+  const valid = name.trim().length > 0 && handle.length >= 4;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,7 +21,7 @@ export default function CreatePal() {
     setError("");
 
     const res = await fetch("/api/pal", {
-      body: JSON.stringify({ username: name }),
+      body: JSON.stringify({ name: name.trim(), username: handle }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
@@ -37,37 +38,59 @@ export default function CreatePal() {
   return (
     <div className={CARD}>
       <p className={LABEL}>Deploy Your Pal</p>
-      <p className="mt-2 text-sm text-zinc-400">
-        Your pal will be able to send and receive emails from{" "}
-        <span className="font-medium text-white">
-          {name || "username"}@{domain}
-        </span>
-        .
-      </p>
-      <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-        <div className="flex items-center gap-0">
+
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        {/* Name */}
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">
+            Name
+          </label>
           <input
             type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="username"
-            className={[INPUT, "rounded-r-none"].join(" ")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="What should your pal be called?"
+            className={INPUT}
           />
-          <span
-            className={[
-              "flex h-9 items-center rounded-r-lg border",
-              "border-l-0 border-zinc-800 bg-zinc-950 px-3",
-              "text-sm text-zinc-500 select-none",
-            ].join(" ")}
-          >
-            @{domain}
-          </span>
         </div>
-        {name.length > 0 && name.length < 4 && (
-          <p className="text-xs text-zinc-500">
-            Must be at least 4 characters.
+
+        {/* Email */}
+        <div>
+          <label className="mb-1 block text-xs text-zinc-400">
+            Email
+          </label>
+          <div className="flex items-center gap-0">
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="username"
+              className={[INPUT, "rounded-r-none"].join(" ")}
+            />
+            <span
+              className={[
+                "flex h-9 items-center rounded-r-lg border",
+                "border-l-0 border-zinc-800 bg-zinc-950 px-3",
+                "text-sm text-zinc-500 select-none",
+              ].join(" ")}
+            >
+              @{domain}
+            </span>
+          </div>
+          {handle.length > 0 && handle.length < 4 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              Must be at least 4 characters.
+            </p>
+          )}
+          <p className="mt-1 text-xs text-zinc-500">
+            Your pal will send and receive emails as{" "}
+            <span className="text-zinc-300">
+              {handle || "username"}@{domain}
+            </span>
+            .
           </p>
-        )}
+        </div>
+
         <button
           type="submit"
           disabled={!valid || loading}

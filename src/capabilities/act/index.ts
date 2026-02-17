@@ -68,6 +68,7 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     credits: ectx.principal.credits,
     domain: env.EMAIL_DOMAIN,
     documents,
+    name: ectx.principal.name,
     username: ectx.principal.username,
   });
   const tools = { ...origin.tools, ...remote.tools };

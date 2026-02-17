@@ -38,6 +38,8 @@ export const principal = pgTable("principal", {
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
+  /** Display name chosen by the owner. */
+  name: text("name").notNull(),
   /** Unique handle; doubles as the principal's email local-part. */
   username: text("username").notNull().unique(),
 });

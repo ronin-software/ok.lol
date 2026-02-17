@@ -36,6 +36,8 @@ export type OriginExecutionContext = {
     accountId: string;
     /** The hire that initiated this execution */
     hireId: string;
+    /** Display name */
+    name: string;
     /** The calling principal's username */
     username: string;
   };
@@ -49,6 +51,8 @@ export type OriginExecutionContext = {
     documents: Document[];
     /** The principal's ID */
     id: string;
+    /** Display name */
+    name: string;
     /** The principal's username */
     username: string;
   };
@@ -117,6 +121,7 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
     caller = {
       accountId: callerRow.accountId,
       hireId: claims.hireId,
+      name: callerRow.name,
       username: callerRow.username,
     };
 
@@ -144,6 +149,7 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
       credits,
       documents: contextDocs,
       id: row.id,
+      name: row.name,
       username: row.username,
     },
   };

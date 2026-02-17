@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       credits: tbAccount ? available(tbAccount) : 0n,
       documents: docs,
       id: pal.id,
+      name: pal.name,
       username: pal.username,
     },
   };

@@ -33,7 +33,7 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
   available: async () => true,
   async call(ectx, email) {
     await logCall(ectx, "email-send", email);
-    const from = `${ectx.principal.username}@${env.EMAIL_DOMAIN}`;
+    const from = `${ectx.principal.name} <${ectx.principal.username}@${env.EMAIL_DOMAIN}>`;
     // Cast needed: Omit over a discriminated union loses branch structure.
     await resend.emails.send({ ...email, from } as CreateEmailOptions);
   },

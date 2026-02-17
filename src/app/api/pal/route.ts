@@ -18,16 +18,19 @@ const USERNAME_RE = /^[a-z][a-z0-9_-]*$/;
 
 
 /** Schema for requests to POST /api/pal */
-const RequestBodySchema = z.object({ username: z.string().min(1) });
+const RequestBodySchema = z.object({
+  name: z.string().min(1).max(64),
+  username: z.string().min(1),
+});
 
 /**
  * POST /api/pal
  *
- * Validates a username and creates a Stripe Checkout Session
+ * Validates a name + username and creates a Stripe Checkout Session
  * for $20. The webhook creates the principal row and funds the
  * account on successful payment.
  *
- * Body: { username: string }
+ * Body: { name: string; username: string }
  * Returns: { url: string }
  */
 export async function POST(req: Request) {
@@ -35,20 +38,20 @@ export async function POST(req: Request) {
   if (!accountId) return error(401, "Unauthorized");
 
   const parsed = RequestBodySchema.safeParse(await req.json());
-  if (!parsed.success) return error(400, "Missing username");
-  const { username } = parsed.data;
+  if (!parsed.success) return error(400, "Missing name or username");
+  const { name } = parsed.data;
 
-  const name = username.toLowerCase().trim();
-  if (name.length < 4) {
+  const handle = parsed.data.username.toLowerCase().trim();
+  if (handle.length < 4) {
     return error(400, "Username must be at least 4 characters");
   }
-  if (!USERNAME_RE.test(name)) {
+  if (!USERNAME_RE.test(handle)) {
     return error(
       400,
       "Username must start with a letter and contain only lowercase letters, numbers, hyphens, and underscores",
     );
   }
-  if (RESERVED.has(name)) {
+  if (RESERVED.has(handle)) {
     return error(400, "Username is reserved");
   }
 
@@ -56,7 +59,7 @@ export async function POST(req: Request) {
   const existing = await db
     .select({ id: principal.id })
     .from(principal)
-    .where(eq(principal.username, name))
+    .where(eq(principal.username, handle))
     .then((rows) => rows[0]);
   if (existing) return error(409, "Username already taken");
 
@@ -79,7 +82,7 @@ export async function POST(req: Request) {
     accountId,
     cents: REGISTRATION_CENTS,
     customerId: acct.stripeCustomerId,
-    metadata: { username: name },
+    metadata: { name, username: handle },
     successUrl: `${env.BASE_URL}/api/stripe/funded?session_id={CHECKOUT_SESSION_ID}`,
   });
 

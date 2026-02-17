@@ -35,7 +35,7 @@ export default async function Dashboard() {
   if (!acct) redirect("/api/auth/signout");
 
   const pal = await db
-    .select({ id: principal.id, username: principal.username })
+    .select({ id: principal.id, name: principal.name, username: principal.username })
     .from(principal)
     .where(eq(principal.accountId, accountId))
     .then((rows) => rows[0]);
@@ -130,7 +130,7 @@ export default async function Dashboard() {
       </div>
       {pal ? (
         <>
-          <PalBadge username={pal.username} />
+          <PalBadge name={pal.name} username={pal.username} />
           <Link
             href="/chat"
             className={[
@@ -140,7 +140,7 @@ export default async function Dashboard() {
               "hover:border-zinc-500 hover:bg-zinc-800",
             ].join(" ")}
           >
-            Chat with {pal.username}
+            Chat with {pal.name}
           </Link>
           <BalanceCard balance={balance} />
           <PayoutCard enabled={acct.stripeConnectId != null} />
@@ -178,7 +178,7 @@ async function resolveDocuments(principalId: string): Promise<DocumentData[]> {
 // Pal badge
 // –
 
-function PalBadge({ username }: { username: string }) {
+function PalBadge({ name, username }: { name: string; username: string }) {
   return (
     <div
       className={[
@@ -187,11 +187,9 @@ function PalBadge({ username }: { username: string }) {
       ].join(" ")}
     >
       <div>
-        <p className="text-sm font-medium text-white">
-          {username}@{env.EMAIL_DOMAIN}
-        </p>
+        <p className="text-sm font-medium text-white">{name}</p>
         <p className="text-xs text-zinc-500">
-          Your pal can send and receive emails at this address.
+          {username}@{env.EMAIL_DOMAIN}
         </p>
       </div>
     </div>
