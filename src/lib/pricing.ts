@@ -1,16 +1,13 @@
 /**
  * Unit cost registry for payable resources.
  *
- * Each key identifies a billable resource (model tokens, API calls, etc.).
- * Cost per usage row is `amount * unitCost`, computed at write time so
- * the rate at time of use is locked in.
+ * Model inference costs are reported by the AI Gateway at call time,
+ * so only non-gateway resources need entries here.
  */
 
-/** Unit cost per resource in micro-USD */
+/** Unit cost per resource in micro-USD. */
 export const unitCosts: Record<string, bigint> = {
-  "claude-sonnet-4-5-20250929:input": 3n,
-  "claude-sonnet-4-5-20250929:output": 15n,
-  "resend:send": 1000n,
+  "resend:send": 900n, // $0.0009 per email sent
 };
 
 /** Returns the unit cost for a resource key. Throws if unknown. */

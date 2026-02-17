@@ -17,9 +17,9 @@ function required(key: string): string {
 
 /** Validated environment accessors. Asserts on every read. */
 export const env = {
-  /** Anthropic API key for direct model access (act capability). */
-  get ANTHROPIC_API_KEY() {
-    return required("ANTHROPIC_API_KEY");
+  /** Vercel AI Gateway API key. */
+  get AI_GATEWAY_API_KEY() {
+    return required("AI_GATEWAY_API_KEY");
   },
   /** Public-facing origin. */
   get BASE_URL() {

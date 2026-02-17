@@ -1,15 +1,18 @@
 import { db } from "@/db";
 import { usage } from "@/db/schema";
 import { assert } from "@/lib/assert";
-import { computeCost } from "@/lib/pricing";
 import { env } from "@/lib/env";
 import { debit } from "@/lib/tigerbeetle";
-import { createAnthropic } from "@ai-sdk/anthropic";
 import type { UIMessage } from "ai";
-import { convertToModelMessages, stepCountIs, streamText } from "ai";
-import { withDefaults } from "../documents/defaults";
+import {
+  convertToModelMessages,
+  createGateway,
+  stepCountIs,
+  streamText,
+} from "ai";
 import type { OriginExecutionContext } from "../_execution-context";
 import { logCall } from "../_log";
+import { withDefaults } from "../documents/defaults";
 import { assemblePrompt } from "./prompt";
 import { makeTools } from "./tools";
 import * as workers from "./workers";
@@ -24,14 +27,15 @@ import * as workers from "./workers";
  * - Streaming (HTTP):     `result.toUIMessageStreamResponse()`
  * - Non-streaming (email): `await result.text`
  *
- * Usage recording fires automatically in `onFinish`.
+ * Usage recording fires automatically in `onFinish`. Cost is reported
+ * by the Vercel AI Gateway via `providerMetadata.gateway.cost`.
  */
 
-/** Anthropic provider instance. */
-const anthropic = createAnthropic();
+/** AI Gateway provider instance. */
+const gateway = createGateway();
 
-/** Default model ID (Anthropic provider format). */
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+/** Default model ID (gateway format: provider/model). */
+const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5-20250929";
 
 /** Hard ceiling on agentic steps to bound cost and latency. */
 const MAX_STEPS = 10;
@@ -40,7 +44,7 @@ const MAX_STEPS = 10;
 type Input = {
   /** UI messages for multi-turn chat. Converted to model messages internally. */
   messages?: UIMessage[];
-  /** Optional model override. */
+  /** Optional model override (gateway format: provider/model). */
   model?: string;
   /** Single prompt for one-shot invocations. */
   prompt?: string;
@@ -79,13 +83,13 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     : { prompt: input.prompt! };
 
   return streamText({
-    model: anthropic(modelId),
+    model: gateway(modelId),
     ...messageInput,
     stopWhen: stepCountIs(MAX_STEPS),
     system,
     tools,
-    onFinish: async ({ totalUsage }) => {
-      await recordUsage(ectx, modelId, totalUsage);
+    onFinish: async ({ providerMetadata }) => {
+      await recordUsage(ectx, modelId, providerMetadata);
     },
   });
 }
@@ -94,51 +98,31 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
 // Usage
 // –
 
-/** Model ID to pricing resource prefix. */
-function pricingPrefix(model: string): string {
-  const slash = model.lastIndexOf("/");
-  return slash >= 0 ? model.slice(slash + 1) : model;
+/** Converts a dollar string (e.g. "0.0045405") to micro-USD bigint. */
+function dollarsToMicro(dollars: string): bigint {
+  const micro = Math.round(parseFloat(dollars) * 1_000_000);
+  return BigInt(micro);
 }
 
-/** Records token usage in the DB and debits the principal's account. */
+/** Records gateway-reported cost in the DB and debits the principal's account. */
 async function recordUsage(
   ectx: OriginExecutionContext,
   model: string,
-  tokens: { inputTokens?: number; outputTokens?: number },
+  metadata: Record<string, Record<string, unknown>> | undefined,
 ) {
-  const prefix = pricingPrefix(model);
-  const inputTokens = BigInt(tokens.inputTokens ?? 0);
-  const outputTokens = BigInt(tokens.outputTokens ?? 0);
-  const inputCost = computeCost(`${prefix}:input`, inputTokens);
-  const outputCost = computeCost(`${prefix}:output`, outputTokens);
-  const totalCost = inputCost + outputCost;
+  const costStr = (metadata?.gateway?.cost as string) ?? "0";
+  const cost = dollarsToMicro(costStr);
+  if (cost <= 0n) return;
 
-  // Write usage rows for audit trail.
-  const rows = [];
-  if (inputTokens > 0n) {
-    rows.push({
-      accountId: ectx.principal.accountId,
-      amount: inputTokens,
-      cost: inputCost,
-      hireId: ectx.caller?.hireId,
-      resource: `${prefix}:input`,
-    });
-  }
-  if (outputTokens > 0n) {
-    rows.push({
-      accountId: ectx.principal.accountId,
-      amount: outputTokens,
-      cost: outputCost,
-      hireId: ectx.caller?.hireId,
-      resource: `${prefix}:output`,
-    });
-  }
-  if (rows.length > 0) {
-    await db.insert(usage).values(rows);
-  }
+  // Audit trail.
+  await db.insert(usage).values({
+    accountId: ectx.principal.accountId,
+    amount: 1n,
+    cost,
+    hireId: ectx.caller?.hireId,
+    resource: model,
+  });
 
-  // Debit credits. No-op if nothing was consumed.
-  if (totalCost > 0n) {
-    await debit(BigInt(ectx.principal.accountId), totalCost);
-  }
+  // Debit credits.
+  await debit(BigInt(ectx.principal.accountId), cost);
 }

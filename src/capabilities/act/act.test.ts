@@ -1,11 +1,12 @@
-import { createGateway, generateText, stepCountIs, tool } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateText, stepCountIs, tool } from "ai";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { Document } from "../_execution-context";
-import { listDocuments, readDocument, writeDocument } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
-import emailSend from "../email/email.send";
+import { listDocuments, readDocument, writeDocument } from "../documents";
+import type { Document } from "../_execution-context";
 import { assemblePrompt, type PromptOptions } from "./prompt";
+import emailSend from "../email/email.send";
 
 /** Capabilities for test prompt assembly. */
 const testCapabilities = [emailSend, listDocuments, readDocument, writeDocument];
@@ -15,20 +16,20 @@ const testCapabilities = [emailSend, listDocuments, readDocument, writeDocument]
  * and capability calling behavior.
  *
  * Unit tests validate prompt assembly and defaults deterministically.
- * Integration tests call the AI Gateway to verify the model actually
- * receives and acts on injected context. These require AI_GATEWAY_API_KEY.
+ * Integration tests call Claude Sonnet 4.5 to verify the model actually
+ * receives and acts on injected context. These require ANTHROPIC_API_KEY.
  */
 
-const HAS_API_KEY = !!process.env.AI_GATEWAY_API_KEY;
-const gw = HAS_API_KEY ? createGateway() : undefined;
+const HAS_API_KEY = !!process.env.ANTHROPIC_API_KEY;
+const anthropic = HAS_API_KEY ? createAnthropic() : undefined;
 
-/** Gateway model ID for integration tests. */
-const MODEL_ID = "anthropic/claude-sonnet-4-5-20250929";
+/** Anthropic model ID for integration tests. */
+const MODEL_ID = "claude-sonnet-4-5-20250929";
 
 /** Resolves the model, skipping if no API key. */
 function model() {
-  if (!gw) throw new Error("AI_GATEWAY_API_KEY required for model tests");
-  return gw(MODEL_ID);
+  if (!anthropic) throw new Error("ANTHROPIC_API_KEY required for model tests");
+  return anthropic(MODEL_ID);
 }
 
 /** Timeout for model calls — generous to accommodate cold starts. */
@@ -43,9 +44,7 @@ function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
     capabilities: testCapabilities,
     credits: 1_000_000n,
-    domain: "ok.lol",
     documents: withDefaults([]),
-    name: "bot",
     username: "test",
     ...overrides,
   };
@@ -121,11 +120,10 @@ describe("assemblePrompt", () => {
       caller: {
         accountId: "acc-1",
         hireId: "hire-1",
-        name: "bot",
         username: "alice",
       },
     }));
-    expect(prompt).toContain("hired by bot (alice@ok.lol)");
+    expect(prompt).toContain("hired by alice@ok.lol");
     expect(prompt).toContain("hire-1");
   });
 

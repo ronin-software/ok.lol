@@ -198,7 +198,7 @@ export const usage = pgTable("usage", {
   /** Associated hire, for settlement reimbursement. Null when self-directed. */
   hireId: uuid("hire_id").references(() => hire.id),
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Payable resource key (e.g. "claude-sonnet-4.5:input", "resend:send") */
+  /** Payable resource key (e.g. "resend:send", "model-provider/model-name:input") */
   resource: text("resource").notNull(),
 });
 

@@ -29,7 +29,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.44",
     "@ai-sdk/react": "^3.0.88",
     "@ok.lol/astral": "workspace:*",
     "@ok.lol/capability": "workspace:*",
