@@ -297,15 +297,39 @@ export async function transfer(
 // Usage Debits
 // –
 
-/** Direct debit from a user account to platform for usage charges. */
+/** Usage fee basis points (500 = 5%). */
+const FEE_BPS_USAGE = 500n;
+
+/**
+ * Debit a user account for usage, plus a 5% platform fee.
+ * Uses linked transfers for atomicity — both succeed or neither does.
+ */
 export async function debit(
   accountId: bigint,
   amount: bigint,
 ) {
+  const feeAmount = (amount * FEE_BPS_USAGE + 9999n) / 10000n;
   const errors = await tb.createTransfers([
+    // Leg 1 (linked): upstream cost.
     {
       amount,
       code: CODE_USAGE,
+      credit_account_id: PLATFORM_ACCOUNT_ID,
+      debit_account_id: accountId,
+      flags: TransferFlags.linked,
+      id: id(),
+      ledger: LEDGER,
+      pending_id: 0n,
+      timeout: 0,
+      timestamp: 0n,
+      user_data_128: 0n,
+      user_data_32: 0,
+      user_data_64: 0n,
+    },
+    // Leg 2: platform fee (5% of usage).
+    {
+      amount: feeAmount,
+      code: CODE_FEE,
       credit_account_id: PLATFORM_ACCOUNT_ID,
       debit_account_id: accountId,
       flags: TransferFlags.none,

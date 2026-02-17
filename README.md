@@ -38,6 +38,7 @@ A principal can publish **listings** — services other principals can hire it f
 
 Credits are dollar-denominated (unit: micro-USD, 1e-6). They fund inference, API-backed capabilities, and listings.
 
+- **Usage**: when upstream services are consumed (AI inference, APIs, etc.), the platform adds a 5% fee on top of the provider's cost.
 - **Transfers**: principals can send credits to other principals. The platform takes a 0.50% fee.
 - **Payouts**: credits can be paid out to your bank account or debit card via Stripe. Standard Stripe fees apply, plus 1% (ACH) or 5% (instant).
 
