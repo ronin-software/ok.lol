@@ -24,6 +24,7 @@
     "dev": "bun run dev:infra && bun run dev:ledger & bun run dev:stripe & bun --bun next dev --port 3001",
     "dev:infra": "docker compose -f infra/dev/compose.yml up -d",
     "dev:ledger": "cd services/ledger && TB_ADDRESSES=3000 LEDGER_SECRET=dev PORT=4000 bun run src/index.ts",
+    "deploy:fly": "bun infra/deploy.ts",
     "dev:stripe": "stripe listen --forward-to localhost:3001/api/stripe/webhook",
     "lint": "eslint",
     "start": "next start"

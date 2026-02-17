@@ -49,6 +49,12 @@ export async function POST(req: Request) {
   if (!toAddress) {
     return new Response("No recipient", { status: 400 });
   }
+
+  // Guard: ignore emails for domains that don't match this environment.
+  if (!toAddress.endsWith(`@${env.EMAIL_DOMAIN}`)) {
+    return new Response("ok");
+  }
+
   const username = toAddress.split("@")[0]!;
 
   const [row] = await db

@@ -1,15 +1,13 @@
 # sish tunnel relay for worker connectivity.
+# App name supplied at deploy time: fly deploy --app oklol-tunnel
 #
 # Setup (one-time):
 #   1. fly apps create oklol-tunnel
 #   2. fly ips allocate-v4 -a oklol-tunnel
 #   3. fly certs add "*.w.ok.lol" -a oklol-tunnel
-#   4. DNS: add wildcard CNAME  *.w.ok.lol -> oklol-tunnel.fly.dev
+#   4. DNS: wildcard CNAME *.w.ok.lol -> oklol-tunnel.fly.dev
 #   5. fly secrets set TUNNEL_KEY=<shared-secret> -a oklol-tunnel
-#      (same value as the origin's TUNNEL_KEY env var)
-#   6. fly deploy -a oklol-tunnel
-
-app = 'oklol-tunnel'
+#   6. fly deploy --app oklol-tunnel
 primary_region = 'iad'
 
 [build]

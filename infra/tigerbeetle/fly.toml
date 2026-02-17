@@ -1,4 +1,4 @@
-app = 'oklol-tb-staging'
+# App name supplied at deploy time: fly deploy --app oklol-tb-{env}
 primary_region = 'iad'
 
 [build]

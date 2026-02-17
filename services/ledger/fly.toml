@@ -1,4 +1,4 @@
-app = 'oklol-ledger-staging'
+# App name supplied at deploy time: fly deploy --app oklol-ledger-{env}
 primary_region = 'iad'
 
 [build]
