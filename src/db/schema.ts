@@ -19,8 +19,6 @@ export const account = pgTable("account", {
   /** TigerBeetle account ID (u128, stored as text). */
   id: text("id").primaryKey(),
   name: text("name"),
-  /** Argon2id hash of the account password. */
-  passwordHash: text("password_hash").notNull(),
   /** Stripe Connect account ID. Non-null when payouts are enabled. */
   stripeConnectId: text("stripe_connect_id"),
   /** Stripe Customer ID for saved payment methods. */

@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { BUTTON_PRIMARY as BUTTON, CARD, INPUT, LABEL } from "./styles";
 
-const domain = process.env.NEXT_PUBLIC_EMAIL_DOMAIN ?? "ok.lol";
-
-export default function CreatePal() {
+export default function CreatePal({ domain }: { domain: string }) {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);

@@ -60,6 +60,19 @@ export async function verify(): Promise<string | undefined> {
   }
 }
 
+/**
+ * Create a short-lived JWT for handing a session to the native app.
+ * The app exchanges this for its own persisted session. 60 s expiry
+ * keeps the window tight — the token travels in a custom URL scheme.
+ */
+export async function handoff(accountId: string): Promise<string> {
+  return new SignJWT({ purpose: "handoff", sub: accountId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("60s")
+    .sign(secret());
+}
+
 /** Set-Cookie header value that expires the session. */
 export function clear(): string {
   const parts = [

@@ -30,9 +30,17 @@ export const env = {
   get DATABASE_URL() {
     return required("DATABASE_URL");
   },
-  /** Email domain for the current environment. */
+  /** Principal address domain (username@ok.lol). */
   get EMAIL_DOMAIN() {
-    return process.env.NEXT_PUBLIC_EMAIL_DOMAIN ?? "ok.lol";
+    return required("EMAIL_DOMAIN");
+  },
+  /** Transactional email domain (sign-in links, etc.). Separate for reputation. */
+  get EMAIL_DOMAIN_TRANSACTIONAL() {
+    return required("EMAIL_DOMAIN_TRANSACTIONAL");
+  },
+  /** Custom URL scheme for native app deep links. */
+  get MOBILE_SCHEME() {
+    return required("MOBILE_SCHEME");
   },
   get RESEND_API_KEY() {
     return required("RESEND_API_KEY");
@@ -54,6 +62,9 @@ export const env = {
 /** Eagerly validate all required vars. Called once at startup. */
 export function validate() {
   env.DATABASE_URL;
+  env.EMAIL_DOMAIN;
+  env.EMAIL_DOMAIN_TRANSACTIONAL;
+  env.MOBILE_SCHEME;
   env.RESEND_API_KEY;
   env.RESEND_WEBHOOK_SECRET;
   env.SESSION_SECRET;

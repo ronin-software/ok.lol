@@ -149,7 +149,7 @@ export default async function Dashboard() {
           <ActivityTable rows={activity} />
         </>
       ) : (
-        <CreatePal />
+        <CreatePal domain={env.EMAIL_DOMAIN} />
       )}
     </div>
   );

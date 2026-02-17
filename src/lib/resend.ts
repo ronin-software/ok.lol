@@ -8,24 +8,24 @@ import { env } from "./env";
 /** Shared Resend client. */
 export const resend = new Resend(env.RESEND_API_KEY);
 
-/** Default sender address for transactional email. */
+/** Sender address for transactional email (separate domain for reputation). */
 function from() {
-  return `ok.lol <noreply@${env.EMAIL_DOMAIN}>`;
+  return `ok.lol <noreply@${env.EMAIL_DOMAIN_TRANSACTIONAL}>`;
 }
 
-/** Send a password reset email with a one-time link. */
-export async function sendResetEmail(
+/** Send a magic sign-in link. */
+export async function sendMagicLink(
   email: string,
-  resetUrl: string,
+  url: string,
 ): Promise<void> {
   const { error } = await resend.emails.send({
     from: from(),
     html: [
-      `<p>A password reset was requested for your ${env.EMAIL_DOMAIN} account.</p>`,
-      `<p><a href="${resetUrl}">Reset your password</a></p>`,
-      "<p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>",
+      `<p>Sign in to your ${env.EMAIL_DOMAIN} account:</p>`,
+      `<p><a href="${url}">Sign in</a></p>`,
+      "<p>This link expires in 10 minutes. If you didn't request this, ignore this email.</p>",
     ].join(""),
-    subject: "Reset your password",
+    subject: "Sign in to ok.lol",
     to: email,
   });
 

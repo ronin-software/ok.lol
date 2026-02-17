@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { BUTTON, INPUT, LABEL, LINK } from "../styles";
+import { BUTTON, INPUT, LABEL } from "../styles";
 
-export default function SigninForm() {
+export default function SignInForm() {
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -14,85 +14,59 @@ export default function SigninForm() {
     setError("");
 
     const fd = new FormData(e.target as HTMLFormElement);
-    const res = await fetch("/api/auth/signin", {
-      body: JSON.stringify({
-        email: fd.get("email"),
-        password: fd.get("password"),
-      }),
+    const res = await fetch("/api/auth/send", {
+      body: JSON.stringify({ email: fd.get("email") }),
       headers: { "content-type": "application/json" },
       method: "POST",
     });
 
+    setLoading(false);
+
     if (!res.ok) {
       const data = await res.json();
-      setError(data.error?.message ?? "Invalid credentials");
-      setLoading(false);
+      setError(data.error?.message ?? "Something went wrong");
       return;
     }
 
-    window.location.href = "/dashboard";
+    setSent(true);
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">ok.lol</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Enter your email and password.
+            {sent
+              ? "Check your email for a sign-in link."
+              : "Enter your email to sign in or create an account."}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="email" className={LABEL}>
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              placeholder="you@example.com"
-              className={INPUT}
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between">
-              <label htmlFor="password" className={LABEL}>
-                Password
+        {!sent && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className={LABEL}>
+                Email
               </label>
-              <Link
-                href="/reset"
-                className="text-xs text-zinc-500 transition-colors hover:text-white"
-              >
-                Forgot password?
-              </Link>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoFocus
+                placeholder="you@example.com"
+                className={INPUT}
+              />
             </div>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              placeholder="••••••••"
-              className={INPUT}
-            />
-          </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p className="text-sm text-red-400">{error}</p>}
 
-          <button type="submit" disabled={loading} className={BUTTON}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
-
-        <p className="text-center">
-          <Link href="/sign-up" className={LINK}>
-            Create an account
-          </Link>
-        </p>
+            <button type="submit" disabled={loading} className={BUTTON}>
+              {loading ? "Sending..." : "Continue"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

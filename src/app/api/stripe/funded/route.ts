@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/db";
 import { principal } from "@/db/schema";
 import { verify } from "@/lib/session";
@@ -14,11 +15,13 @@ import { stripe } from "@/lib/stripe";
  * Funding is handled exclusively by the webhook to prevent
  * double-crediting. The principal creation is safe to run from
  * both paths because it's a no-op on conflict.
+ *
+ * Mobile-originated flows (platform=mobile cookie) redirect to
+ * /open so the user lands back in the native app.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
 
-  // Auth check: only the session owner should trigger fulfillment.
   const accountId = await verify();
   if (!accountId) {
     return NextResponse.redirect(`${url.origin}/sign-in`);
@@ -45,7 +48,18 @@ export async function GET(req: Request) {
     }
   }
 
-  const res = NextResponse.redirect(`${url.origin}/dashboard`);
+  // Mobile-originated flows redirect to the app deep-link page.
+  const jar = await cookies();
+  const mobile = jar.get("platform")?.value === "mobile";
+
+  const destination = mobile ? "/open" : "/dashboard";
+  const res = NextResponse.redirect(`${url.origin}${destination}`);
   res.cookies.set("funded", "1", { maxAge: 30, path: "/" });
+
+  // Clear the platform cookie — it's been consumed.
+  if (mobile) {
+    res.cookies.delete("platform");
+  }
+
   return res;
 }
