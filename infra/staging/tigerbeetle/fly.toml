@@ -1,0 +1,22 @@
+app = 'oklol-tb-staging'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+# TCP service for Flycast (private) routing.
+[[services]]
+  protocol = 'tcp'
+  internal_port = 3000
+
+  [[services.ports]]
+    port = 3000
+
+[[mounts]]
+  source = 'tb_data'
+  destination = '/data'
+
+[[vm]]
+  memory = '2gb'
+  cpu_kind = 'shared'
+  cpus = 1

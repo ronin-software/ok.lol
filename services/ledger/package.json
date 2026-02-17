@@ -1,0 +1,8 @@
+{
+  "name": "@ok.lol/ledger",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "tigerbeetle-node": "0.16.72"
+  }
+}

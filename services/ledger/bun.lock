@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "ledger",
+      "dependencies": {
+        "tigerbeetle-node": "0.16.72",
+      },
+    },
+  },
+  "packages": {
+    "tigerbeetle-node": ["tigerbeetle-node@0.16.72", "", {}, "sha512-6S1x5VJ1vQcFN9gIfA7YWL14RSAceoVYdUzC9HbSnAbN6xtrUD+RaOguiDo2FEfCAixN5IekWpFzaa6fVjtYhg=="],
+  }
+}

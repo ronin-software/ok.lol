@@ -1,36 +1,109 @@
-import {
-  AccountFlags,
-  TransferFlags,
-  createClient,
-  id,
-  type Account,
-} from "tigerbeetle-node";
 import { assert } from "./assert";
 
-export { id } from "tigerbeetle-node";
-export type { Account } from "tigerbeetle-node";
+const LEDGER_URL = process.env.LEDGER_URL;
+const LEDGER_SECRET = process.env.LEDGER_SECRET;
 
-// Persist across HMR in development.
-const globalStore = globalThis as unknown as {
-  __tb?: ReturnType<typeof createClient>;
-  __tbBootstrapped?: boolean;
-};
-const tb = (globalStore.__tb ??= createClient({
-  cluster_id: BigInt(process.env.TB_CLUSTER_ID ?? "0"),
-  replica_addresses: (
-    process.env.TB_ADDRESSES ?? "3000"
-  ).split(","),
-}));
+// –
+// Account type (mirrors tigerbeetle-node's Account)
+// –
 
-/** Ledger 1 = USD in micro-dollar precision (1e-6). */
-const LEDGER = 1;
+export interface Account {
+  /** Transfer code. */
+  code: number;
+  /** Pending credits. */
+  credits_pending: bigint;
+  /** Posted credits. */
+  credits_posted: bigint;
+  /** Pending debits. */
+  debits_pending: bigint;
+  /** Posted debits. */
+  debits_posted: bigint;
+  /** Account flags. */
+  flags: number;
+  /** Account ID. */
+  id: bigint;
+  /** Ledger identifier. */
+  ledger: number;
+  /** Reserved field. */
+  reserved: number;
+  /** Creation timestamp. */
+  timestamp: bigint;
+  /** 128-bit user data. */
+  user_data_128: bigint;
+  /** 32-bit user data. */
+  user_data_32: number;
+  /** 64-bit user data. */
+  user_data_64: bigint;
+}
+
+/** Deserialize a JSON account (string bigints) into a typed Account. */
+function parseAccount(raw: Record<string, unknown>): Account {
+  return {
+    code: Number(raw.code),
+    credits_pending: BigInt(raw.credits_pending as string),
+    credits_posted: BigInt(raw.credits_posted as string),
+    debits_pending: BigInt(raw.debits_pending as string),
+    debits_posted: BigInt(raw.debits_posted as string),
+    flags: Number(raw.flags),
+    id: BigInt(raw.id as string),
+    ledger: Number(raw.ledger),
+    reserved: Number(raw.reserved),
+    timestamp: BigInt(raw.timestamp as string),
+    user_data_128: BigInt(raw.user_data_128 as string),
+    user_data_32: Number(raw.user_data_32),
+    user_data_64: BigInt(raw.user_data_64 as string),
+  };
+}
+
+// –
+// RPC
+// –
+
+/** Call a ledger service endpoint. Throws on non-2xx. */
+async function rpc<T = unknown>(
+  path: string,
+  body: Record<string, unknown> = {},
+): Promise<T> {
+  assert(LEDGER_URL, "LEDGER_URL is required");
+  assert(LEDGER_SECRET, "LEDGER_SECRET is required");
+
+  const res = await fetch(`${LEDGER_URL}${path}`, {
+    body: JSON.stringify(body),
+    headers: {
+      Authorization: `Bearer ${LEDGER_SECRET}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(payload.error ?? `Ledger ${path}: ${res.status}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+// –
+// ID generation
+// –
+
+/** Generate a unique 128-bit ID (crypto-random). */
+export function id(): bigint {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const view = new DataView(bytes.buffer);
+  // Combine two 64-bit halves into a single 128-bit bigint.
+  return (view.getBigUint64(0) << 64n) | view.getBigUint64(8);
+}
+
+// –
+// Constants
+// –
 
 /** Well-known platform revenue account. */
 export const PLATFORM_ACCOUNT_ID = 1n;
-
-// –
-// Codes
-// –
 
 /** Transfer code for proxy usage debits. */
 export const CODE_USAGE = 1;
@@ -51,60 +124,8 @@ export const CODE_PAYOUT = 5;
 export const CODE_ESCROW = 6;
 
 // –
-// Accounts
+// Pure functions
 // –
-
-/** Create a user account that cannot overdraw (debits <= credits). */
-export async function createAccount(accountId: bigint) {
-  assert(accountId > 0n, "accountId must be positive");
-  assert(
-    accountId !== PLATFORM_ACCOUNT_ID,
-    "cannot create a user account with the platform ID",
-  );
-  const errors = await tb.createAccounts([
-    {
-      code: CODE_USAGE,
-      credits_pending: 0n,
-      credits_posted: 0n,
-      debits_pending: 0n,
-      debits_posted: 0n,
-      flags: AccountFlags.debits_must_not_exceed_credits,
-      id: accountId,
-      ledger: LEDGER,
-      reserved: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB create account: ${err.result}`);
-  }
-}
-
-/** Look up a single account and return its balance fields. */
-export async function lookupAccount(
-  accountId: bigint,
-): Promise<Account | undefined> {
-  assert(accountId > 0n, "accountId must be positive");
-  const accounts = await tb.lookupAccounts([accountId]);
-  return accounts[0];
-}
-
-/** Batch-lookup multiple accounts. Returns a Map keyed by account ID. */
-export async function lookupAccounts(
-  accountIds: bigint[],
-): Promise<Map<bigint, Account>> {
-  assert(accountIds.length > 0, "accountIds must not be empty");
-  const accounts = await tb.lookupAccounts(accountIds);
-  const map = new Map<bigint, Account>();
-  for (const account of accounts) {
-    map.set(account.id, account);
-  }
-  return map;
-}
 
 /**
  * Available balance = credits_posted - debits_posted - debits_pending.
@@ -119,32 +140,84 @@ export function available(account: Account): bigint {
   return result;
 }
 
+/** M2M transfer fee basis points (50 = 0.50%). */
+const FEE_BPS_TRANSFER = 50n;
+
+/**
+ * Compute the recipient-paid fee for an amount.
+ * Ceiling-rounds toward platform so we never undercharge.
+ */
+export function fee(amount: bigint): bigint {
+  assert(amount > 0n, "amount must be positive");
+  const result =
+    (amount * FEE_BPS_TRANSFER + 9999n) / 10000n;
+  assert(result > 0n, "fee must be positive for positive amount");
+  return result;
+}
+
+// –
+// Accounts
+// –
+
+/** Create a user account that cannot overdraw (debits <= credits). */
+export async function createAccount(accountId: bigint) {
+  assert(accountId > 0n, "accountId must be positive");
+  assert(
+    accountId !== PLATFORM_ACCOUNT_ID,
+    "cannot create a user account with the platform ID",
+  );
+  await rpc("/accounts", { accountId: String(accountId) });
+}
+
+/** Look up a single account and return its balance fields. */
+export async function lookupAccount(
+  accountId: bigint,
+): Promise<Account | undefined> {
+  assert(accountId > 0n, "accountId must be positive");
+  const res = await fetch(`${LEDGER_URL}/accounts/lookup`, {
+    body: JSON.stringify({ accountId: String(accountId) }),
+    headers: {
+      Authorization: `Bearer ${LEDGER_SECRET}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (res.status === 404) return undefined;
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(payload.error ?? `Ledger lookup: ${res.status}`);
+  }
+
+  const raw = (await res.json()) as Record<string, unknown>;
+  return parseAccount(raw);
+}
+
+/** Batch-lookup multiple accounts. Returns a Map keyed by account ID. */
+export async function lookupAccounts(
+  accountIds: bigint[],
+): Promise<Map<bigint, Account>> {
+  assert(accountIds.length > 0, "accountIds must not be empty");
+  const raw = await rpc<Record<string, unknown>[]>("/accounts/lookup-many", {
+    accountIds: accountIds.map(String),
+  });
+  const map = new Map<bigint, Account>();
+  for (const entry of raw) {
+    const account = parseAccount(entry);
+    map.set(account.id, account);
+  }
+  return map;
+}
+
 // –
 // Bootstrap
 // –
 
 /** Ensure the platform revenue account exists. Idempotent. */
 export async function bootstrap() {
-  if (globalStore.__tbBootstrapped) return;
-  await tb.createAccounts([
-    {
-      code: CODE_USAGE,
-      credits_pending: 0n,
-      credits_posted: 0n,
-      debits_pending: 0n,
-      debits_posted: 0n,
-      flags: AccountFlags.history,
-      id: PLATFORM_ACCOUNT_ID,
-      ledger: LEDGER,
-      reserved: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  // Ignore "exists" errors — idempotent by design.
-  globalStore.__tbBootstrapped = true;
+  await rpc("/bootstrap");
 }
 
 // –
@@ -173,28 +246,15 @@ export async function reserve(
     "cannot reserve from the platform account",
   );
   assert(timeout > 0, "timeout must be positive");
-  const transferId = id();
-  const errors = await tb.createTransfers([
-    {
-      amount,
-      code,
-      credit_account_id: PLATFORM_ACCOUNT_ID,
-      debit_account_id: debitAccountId,
-      flags: TransferFlags.pending,
-      id: transferId,
-      ledger: LEDGER,
-      pending_id: 0n,
-      timeout,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB reserve: ${err.result}`);
-  }
+
+  const result = await rpc<{ transferId: string }>("/reserve", {
+    amount: String(amount),
+    code,
+    debitAccountId: String(debitAccountId),
+    timeout,
+  });
+
+  const transferId = BigInt(result.transferId);
   assert(transferId > 0n, "transferId must be positive");
   return transferId;
 }
@@ -203,27 +263,10 @@ export async function reserve(
 export async function post(pendingId: bigint, amount: bigint) {
   assert(pendingId > 0n, "pendingId must be positive");
   assert(amount >= 0n, "amount must be non-negative");
-  const errors = await tb.createTransfers([
-    {
-      amount,
-      code: 0, // Inherit from pending.
-      credit_account_id: 0n,
-      debit_account_id: 0n,
-      flags: TransferFlags.post_pending_transfer,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: pendingId,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB post: ${err.result}`);
-  }
+  await rpc("/post", {
+    amount: String(amount),
+    pendingId: String(pendingId),
+  });
 }
 
 /**
@@ -232,51 +275,12 @@ export async function post(pendingId: bigint, amount: bigint) {
  */
 export async function void_(pendingId: bigint) {
   assert(pendingId > 0n, "pendingId must be positive");
-  const errors = await tb.createTransfers([
-    {
-      amount: 0n,
-      code: 0, // Inherit from pending.
-      credit_account_id: 0n,
-      debit_account_id: 0n,
-      flags: TransferFlags.void_pending_transfer,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: pendingId,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB void: ${err.result}`);
-  }
+  await rpc("/void", { pendingId: String(pendingId) });
 }
 
 // –
 // M2M Transfers
 // –
-
-/** M2M transfer fee basis points (50 = 0.50%). */
-const FEE_BPS_TRANSFER = 50n;
-
-// Sanity: fee must be between 0 and 100%.
-assert(FEE_BPS_TRANSFER > 0n, "FEE_BPS_TRANSFER must be positive");
-assert(FEE_BPS_TRANSFER < 10000n, "FEE_BPS_TRANSFER must be < 100%");
-
-/**
- * Compute the recipient-paid fee for an amount.
- * Ceiling-rounds toward platform so we never undercharge.
- */
-export function fee(amount: bigint): bigint {
-  assert(amount > 0n, "amount must be positive");
-  const result =
-    (amount * FEE_BPS_TRANSFER + 9999n) / 10000n;
-  assert(result > 0n, "fee must be positive for positive amount");
-  return result;
-}
 
 /**
  * Atomic M2M transfer: debit sender for full amount, credit
@@ -292,47 +296,11 @@ export async function transfer(
   assert(toId > 0n, "toId must be positive");
   assert(fromId !== toId, "cannot transfer to self");
   assert(amount > 0n, "amount must be positive");
-  const transferFee = fee(amount);
-  const net = amount - transferFee;
-  assert(net > 0n, "net must be positive after fee");
-  const errors = await tb.createTransfers([
-    // Leg 1 (linked): sender -> recipient for net amount.
-    {
-      amount: net,
-      code: CODE_TRANSFER,
-      credit_account_id: toId,
-      debit_account_id: fromId,
-      flags: TransferFlags.linked,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: 0n,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-    // Leg 2: sender -> platform for fee.
-    {
-      amount: transferFee,
-      code: CODE_FEE,
-      credit_account_id: PLATFORM_ACCOUNT_ID,
-      debit_account_id: fromId,
-      flags: TransferFlags.none,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: 0n,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB transfer: ${err.result}`);
-  }
+  await rpc("/transfer", {
+    amount: String(amount),
+    fromId: String(fromId),
+    toId: String(toId),
+  });
 }
 
 // –
@@ -353,27 +321,10 @@ export async function debit(
     accountId !== PLATFORM_ACCOUNT_ID,
     "cannot debit the platform account",
   );
-  const errors = await tb.createTransfers([
-    {
-      amount,
-      code: CODE_USAGE,
-      credit_account_id: PLATFORM_ACCOUNT_ID,
-      debit_account_id: accountId,
-      flags: TransferFlags.none,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: 0n,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB debit: ${err.result}`);
-  }
+  await rpc("/debit", {
+    accountId: String(accountId),
+    amount: String(amount),
+  });
 }
 
 // –
@@ -390,25 +341,8 @@ export async function fund(
     creditAccountId !== PLATFORM_ACCOUNT_ID,
     "cannot fund the platform from itself",
   );
-  const errors = await tb.createTransfers([
-    {
-      amount,
-      code: CODE_FUNDING,
-      credit_account_id: creditAccountId,
-      debit_account_id: PLATFORM_ACCOUNT_ID,
-      flags: TransferFlags.none,
-      id: id(),
-      ledger: LEDGER,
-      pending_id: 0n,
-      timeout: 0,
-      timestamp: 0n,
-      user_data_128: 0n,
-      user_data_32: 0,
-      user_data_64: 0n,
-    },
-  ]);
-  const [err] = errors;
-  if (err) {
-    throw new Error(`TB fund: ${err.result}`);
-  }
+  await rpc("/fund", {
+    amount: String(amount),
+    creditAccountId: String(creditAccountId),
+  });
 }
