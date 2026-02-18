@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { usage } from "@/db/schema";
+import { insertMessage } from "@/db/threads";
 import { assert } from "@/lib/assert";
 import { env } from "@/lib/env";
 import { debit } from "@/lib/tigerbeetle";
@@ -48,6 +49,8 @@ type Input = {
   model?: string;
   /** Single prompt for one-shot invocations. */
   prompt?: string;
+  /** Thread ID for message persistence. */
+  threadId?: string;
 };
 
 /** Runs the agent loop. Returns a stream result for the caller to consume. */
@@ -85,14 +88,43 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     ? { messages: await convertToModelMessages(input.messages) }
     : { prompt: input.prompt! };
 
+  const threadId = input.threadId;
+
   return streamText({
     model: gateway(modelId),
     ...messageInput,
     stopWhen: stepCountIs(MAX_STEPS),
     system,
     tools,
-    onFinish: async ({ providerMetadata }) => {
+    onFinish: async ({ providerMetadata, steps }) => {
       await recordUsage(ectx, modelId, providerMetadata);
+
+      // Persist tool call messages when we have a thread.
+      if (threadId) {
+        for (const step of steps) {
+          for (const call of step.toolCalls) {
+            const c = call as Record<string, unknown>;
+            await insertMessage({
+              content: JSON.stringify({ args: c.args, name: c.toolName }),
+              metadata: { toolCallId: c.toolCallId, toolName: c.toolName },
+              role: "tool",
+              threadId,
+            });
+          }
+          for (const result of step.toolResults) {
+            const r = result as Record<string, unknown>;
+            const content = typeof r.result === "string"
+              ? r.result
+              : (r.result == null ? "(void)" : JSON.stringify(r.result));
+            await insertMessage({
+              content,
+              metadata: { toolCallId: r.toolCallId, toolName: r.toolName },
+              role: "tool",
+              threadId,
+            });
+          }
+        }
+      }
     },
   });
 }
@@ -117,7 +149,6 @@ async function recordUsage(
   const cost = dollarsToMicro(costStr);
   if (cost <= 0n) return;
 
-  // Audit trail.
   await db.insert(usage).values({
     accountId: ectx.principal.accountId,
     amount: 1n,
@@ -126,6 +157,5 @@ async function recordUsage(
     resource: model,
   });
 
-  // Debit credits.
   await debit(BigInt(ectx.principal.accountId), cost);
 }

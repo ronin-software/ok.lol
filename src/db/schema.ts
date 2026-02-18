@@ -1,8 +1,10 @@
 import {
   bigint,
   boolean,
+  index,
   integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -139,21 +141,58 @@ export const hire = pgTable("hire", {
 });
 
 // –
-// Message
+// Thread
 // –
 
-/** Inbound event from any channel, routed to a principal for processing. */
-export const message = pgTable("message", {
-  /** Source channel (e.g. "email", "api", "hire"). */
-  channel: text("channel").notNull(),
+export const channelEnum = pgEnum("channel", ["chat", "email"]);
+
+/** A conversation group. Chat sessions and email threads are both threads. */
+export const thread = pgTable("thread", {
+  channel: channelEnum("channel").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Channel-specific payload. */
-  payload: jsonb("payload").notNull(),
   principalId: uuid("principal_id")
     .references(() => principal.id)
     .notNull(),
+  /** LLM-generated for chat, email subject for email, user-overridable. */
+  title: text("title"),
 });
+
+// –
+// Message
+// –
+
+/**
+ * A turn in a thread: user input, assistant response, tool result, or summary.
+ *
+ * Summaries are messages with role "summary". The `summaryId` self-FK forms
+ * a tree: when a set of messages is summarized, each points to the summary
+ * message. Summaries themselves can be covered by higher-level summaries.
+ *
+ * Active context = messages where summaryId IS NULL, ordered by createdAt.
+ */
+export const message = pgTable("message", {
+  /** Human-readable text. For tool results, stringified output. */
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Channel-specific data (email headers, from/to, etc.). */
+  metadata: jsonb("metadata"),
+  /** AI SDK parts array for faithful tool-call reconstruction. */
+  parts: jsonb("parts"),
+  role: text("role", { enum: ["user", "assistant", "tool", "summary"] }).notNull(),
+  /** The summary that covers this message. Null = part of active context. */
+  // Self-FK declared via raw SQL in migration; Drizzle can't type circular refs.
+  summaryId: uuid("summary_id"),
+  threadId: uuid("thread_id")
+    .references(() => thread.id)
+    .notNull(),
+  /** Estimated token count for context budgeting. */
+  tokens: integer("tokens"),
+}, (t) => [
+  index("message_thread_summary_idx").on(t.threadId, t.summaryId),
+  index("message_thread_created_idx").on(t.threadId, t.createdAt),
+]);
 
 // –
 // Payout

@@ -9,28 +9,116 @@ import {
   type ToolUIPart,
 } from "ai";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const transport = new DefaultChatTransport({ api: "/api/chat" });
+type Thread = {
+  channel: string;
+  createdAt: string;
+  id: string;
+  snippet: string | null;
+  snippetAt: string | null;
+  title: string | null;
+};
+
+type StoredMessage = {
+  content: string;
+  id: string;
+  parts: unknown[] | null;
+  role: string;
+};
 
 export default function Chat() {
-  const { error, messages, sendMessage, status } = useChat({ transport });
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // True once we know the viewport is wide (≥768px); starts false for SSR safety.
+  const [wide, setWide] = useState(false);
+  const threadIdRef = useRef<string | null>(null);
+
+  // Auto-open sidebar on wide viewports; close drawer when it becomes narrow.
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    setWide(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setWide(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Keep ref in sync so the transport closure reads the latest value.
+  useEffect(() => { threadIdRef.current = threadId; }, [threadId]);
+
+  // Transport injects threadId into every request body.
+  const [transport] = useState(() =>
+    new DefaultChatTransport({
+      api: "/api/chat",
+      // Include messages + threadId in the request body.
+      prepareSendMessagesRequest: ({ messages, body }) => ({
+        body: { ...body, messages, threadId: threadIdRef.current },
+      }),
+    }),
+  );
+
+  const { error, messages, sendMessage, setMessages, status } = useChat({ transport });
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const streaming = status === "streaming";
 
-  // Auto-scroll to bottom on new content.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, status]);
 
-  // Auto-focus input on mount.
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Load thread list and auto-resume the latest on mount.
+  useEffect(() => {
+    loadThreads().then((list) => {
+      if (list.length > 0) {
+        loadThread(list[0]!.id);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadThreads(): Promise<Thread[]> {
+    const res = await fetch("/api/threads?channel=chat");
+    if (!res.ok) return [];
+    const list: Thread[] = await res.json();
+    setThreads(list);
+    return list;
+  }
+
+  const loadThread = useCallback(async (id: string) => {
+    setThreadId(id);
+    const res = await fetch(`/api/threads/${id}`);
+    if (!res.ok) {
+      setMessages([]);
+      return;
+    }
+    const stored: StoredMessage[] = await res.json();
+
+    const hydrated = stored
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        id: m.id,
+        parts: (m.parts ?? [{ type: "text" as const, text: m.content }]) as UIMessage["parts"],
+        role: m.role as "user" | "assistant",
+      }));
+
+    setMessages(hydrated as UIMessage[]);
+    setDrawerOpen(false);
+  }, [setMessages]);
+
+  function newThread() {
+    setThreadId(null);
+    setMessages([]);
+    setDrawerOpen(false);
+    inputRef.current?.focus();
+  }
 
   function send() {
     const text = input.trim();
@@ -39,7 +127,6 @@ export default function Chat() {
     sendMessage({ text });
   }
 
-  // Submit on Enter (without Shift).
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -48,74 +135,143 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <Link
-          href="/dashboard"
-          className="text-xs text-zinc-500 transition-colors hover:text-white"
-        >
-          Dashboard
-        </Link>
-        <h1 className="text-sm font-medium">Chat</h1>
-        <div className="w-16" />
-      </header>
+    <div className="relative flex h-dvh overflow-hidden bg-background">
+      {/* Scrim — taps outside to close drawer on narrow viewports */}
+      {!wide && drawerOpen && (
+        <div
+          className="absolute inset-0 z-10 bg-black/60"
+          onClick={() => setDrawerOpen(false)}
+        />
+      )}
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto max-w-2xl px-4 py-6 space-y-6">
-          {messages.length === 0 && (
-            <p className="text-center text-sm text-zinc-500 pt-24">
-              Send a message to start chatting with your pal.
-            </p>
-          )}
-
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
-
-          {error && (
-            <div className="rounded-lg border border-red-800 bg-red-950 px-4 py-3 text-sm text-red-300">
-              {error.message}
-            </div>
-          )}
+      {/* Sidebar — overlay on narrow, inline on wide */}
+      {(wide || drawerOpen) && (
+        <div className={[
+          "flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950",
+          wide ? "" : "absolute inset-y-0 left-0 z-20",
+        ].join(" ")}>
+          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-3">
+            <span className="text-xs font-medium text-zinc-400">Threads</span>
+            <button
+              type="button"
+              onClick={newThread}
+              className="rounded px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            >
+              + New
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {threads.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => loadThread(t.id)}
+                className={[
+                  "w-full px-3 py-2 text-left transition-colors",
+                  t.id === threadId
+                    ? "bg-zinc-800 text-white"
+                    : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
+                ].join(" ")}
+              >
+                <div className="truncate text-xs font-medium">
+                  {t.title || "Untitled"}
+                </div>
+                {t.snippet && (
+                  <div className="mt-0.5 truncate text-[11px] text-zinc-600">
+                    {t.snippet}
+                  </div>
+                )}
+              </button>
+            ))}
+            {threads.length === 0 && (
+              <p className="px-3 py-4 text-xs text-zinc-600">No threads yet</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Input */}
-      <div className="shrink-0 border-t border-zinc-800 bg-background">
-        <div className="mx-auto flex max-w-2xl items-end gap-2 px-4 py-3">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message your pal..."
-            rows={1}
-            className={[
-              "flex-1 resize-none rounded-xl border border-zinc-800",
-              "bg-zinc-900 px-4 py-3 text-sm text-white",
-              "placeholder-zinc-600 outline-none",
-              "focus:border-zinc-600 transition-colors",
-              "max-h-32 overflow-y-auto",
-            ].join(" ")}
-            style={{ fieldSizing: "content" } as React.CSSProperties}
-          />
-          <button
-            type="button"
-            onClick={send}
-            disabled={streaming || input.trim().length === 0}
-            className={[
-              "shrink-0 rounded-xl bg-white px-4 py-3",
-              "text-sm font-medium text-black transition-colors",
-              "hover:bg-zinc-200 disabled:opacity-40",
-            ].join(" ")}
-          >
-            {streaming ? "..." : "Send"}
-          </button>
+      {/* Main chat area — min-w-0 so it shrinks correctly inside the flex row */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header */}
+        <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-3">
+          <div className="flex shrink-0 items-center gap-3">
+            {!wide && (
+              <button
+                type="button"
+                onClick={() => { setDrawerOpen(!drawerOpen); if (!drawerOpen) loadThreads(); }}
+                className="text-xs text-zinc-500 transition-colors hover:text-white"
+              >
+                {drawerOpen ? "Close" : "Threads"}
+              </button>
+            )}
+            <Link
+              href="/dashboard"
+              className="text-xs text-zinc-500 transition-colors hover:text-white"
+            >
+              Dashboard
+            </Link>
+          </div>
+          <h1 className="min-w-0 flex-1 truncate px-4 text-center text-sm font-medium">
+            {threads.find((t) => t.id === threadId)?.title || "Chat"}
+          </h1>
+          <div className="shrink-0 w-16" />
+        </header>
+
+        {/* Messages */}
+        <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
+            {messages.length === 0 && (
+              <p className="pt-24 text-center text-sm text-zinc-500">
+                Send a message to start chatting with your pal.
+              </p>
+            )}
+
+            {messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
+
+            {error && (
+              <div className="rounded-lg border border-red-800 bg-red-950 px-4 py-3 text-sm text-red-300">
+                {error.message}
+              </div>
+            )}
+          </div>
         </div>
-        {/* Safe area for mobile home indicator */}
-        <div className="h-[env(safe-area-inset-bottom)]" />
+
+        {/* Input */}
+        <div className="shrink-0 border-t border-zinc-800 bg-background">
+          <div className="mx-auto flex w-full max-w-2xl items-end gap-2 px-4 py-3">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message your pal..."
+              rows={1}
+              className={[
+                "flex-1 resize-none rounded-xl border border-zinc-800",
+                "bg-zinc-900 px-4 py-3 text-sm text-white",
+                "placeholder-zinc-600 outline-none",
+                "focus:border-zinc-600 transition-colors",
+                "max-h-32 overflow-y-auto",
+              ].join(" ")}
+              style={{ fieldSizing: "content" } as React.CSSProperties}
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={streaming || input.trim().length === 0}
+              className={[
+                "shrink-0 rounded-xl bg-white px-4 py-3",
+                "text-sm font-medium text-black transition-colors",
+                "hover:bg-zinc-200 disabled:opacity-40",
+              ].join(" ")}
+            >
+              {streaming ? "..." : "Send"}
+            </button>
+          </div>
+          <div className="h-[env(safe-area-inset-bottom)]" />
+        </div>
       </div>
     </div>
   );
@@ -126,13 +282,11 @@ export default function Chat() {
 // –
 
 type UIMessage = ReturnType<typeof useChat>["messages"][number];
-type Part = UIMessage["parts"][number];
 type ToolPart = DynamicToolUIPart | ToolUIPart;
 
 function MessageBubble({ message }: { message: UIMessage }) {
   const isUser = message.role === "user";
 
-  // Classify parts for layout decisions.
   const textParts: Array<{ i: number; text: string }> = [];
   const toolParts: Array<{ i: number; part: ToolPart }> = [];
   for (let i = 0; i < message.parts.length; i++) {
@@ -142,7 +296,6 @@ function MessageBubble({ message }: { message: UIMessage }) {
     } else if (isToolUIPart(part)) {
       toolParts.push({ i, part });
     }
-    // step-start, empty text, etc. — silently skip.
   }
 
   const hasText = textParts.length > 0;
@@ -155,7 +308,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
       {hasText && (
         <div
           className={[
-            "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+            "min-w-0 max-w-[85%] wrap-break-word rounded-2xl px-4 py-3 text-sm leading-relaxed",
             isUser
               ? "bg-white text-black"
               : "bg-zinc-900 text-zinc-200",
@@ -168,7 +321,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
       )}
 
       {hasTools && (
-        <div className="max-w-[85%] space-y-1">
+        <div className="min-w-0 max-w-[85%] space-y-1">
           {toolParts.map(({ i, part }) => (
             <ToolChip key={i} part={part} />
           ))}
@@ -182,12 +335,15 @@ function MessageBubble({ message }: { message: UIMessage }) {
 // Tool calls
 // –
 
-/** Human-readable labels keyed by tool name. */
 const toolLabels: Record<string, { active: string; done: string }> = {
-  list_documents: { active: "Listing documents", done: "Listed documents" },
-  read_document:  { active: "Reading document",  done: "Read document" },
-  send_email:     { active: "Sending email",     done: "Sent email" },
-  write_document: { active: "Writing document",  done: "Wrote document" },
+  expand:          { active: "Expanding summary",   done: "Expanded summary" },
+  list_documents:  { active: "Listing documents",   done: "Listed documents" },
+  list_threads:    { active: "Listing threads",     done: "Listed threads" },
+  read_document:   { active: "Reading document",    done: "Read document" },
+  read_thread:     { active: "Reading thread",      done: "Read thread" },
+  search_threads:  { active: "Searching threads",   done: "Searched threads" },
+  send_email:      { active: "Sending email",       done: "Sent email" },
+  write_document:  { active: "Writing document",    done: "Wrote document" },
 };
 
 function ToolChip({ part }: { part: ToolPart }) {
@@ -222,21 +378,18 @@ function ToolChip({ part }: { part: ToolPart }) {
         <span className="text-xs text-zinc-300">{label}</span>
       </div>
 
-      {/* Input summary while running */}
       {!done && !errored && "input" in part && part.input != null && (
         <div className="mt-1 text-xs text-zinc-500">
           <ToolInput input={part.input as Record<string, unknown>} />
         </div>
       )}
 
-      {/* Output */}
       {done && "output" in part && (
         <div className="mt-1 border-t border-zinc-800 pt-1 text-xs text-zinc-500">
           {formatOutput(part.output)}
         </div>
       )}
 
-      {/* Error */}
       {errored && "errorText" in part && (
         <div className="mt-1 border-t border-red-900 pt-1 text-xs text-red-400">
           {truncate(String(part.errorText), 120)}
@@ -246,7 +399,6 @@ function ToolChip({ part }: { part: ToolPart }) {
   );
 }
 
-/** Render tool input as a compact summary. */
 function ToolInput({ input }: { input: Record<string, unknown> }) {
   const entries = Object.entries(input);
   if (entries.length === 0) return null;

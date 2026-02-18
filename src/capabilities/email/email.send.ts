@@ -1,3 +1,4 @@
+import { insertMessage } from "@/db/threads";
 import { env } from "@/lib/env";
 import type { Capability } from "@ok.lol/capability";
 import { Resend, type CreateEmailOptions } from "resend";
@@ -5,7 +6,6 @@ import { z } from "zod";
 import type { OriginExecutionContext } from "../_execution-context";
 import { logCall } from "../_log";
 
-// Resend SDK
 const resend = new Resend(env.RESEND_API_KEY);
 
 // –
@@ -21,6 +21,8 @@ const inputSchema = z.object({
   cc: z.union([z.email(), z.array(z.email())]).optional().describe("CC recipient(s)"),
   subject: z.string().describe("Email subject line"),
   text: z.string().describe("Plain text email body"),
+  /** Thread to persist this email in. Omit for fire-and-forget sends. */
+  threadId: z.string().uuid().optional().describe("Thread ID to persist this email in"),
   to: z.email().describe("Recipient email address"),
 });
 
@@ -28,14 +30,34 @@ type Input = z.infer<typeof inputSchema>;
 
 const outputSchema = z.void();
 
-/** Sends an email from the principal's address. */
+/** Sends an email from the principal's address and persists it in the thread. */
 const emailSend: Capability<OriginExecutionContext, Input, void> = {
   available: async () => true,
   async call(ectx, email) {
     await logCall(ectx, "email-send", email);
     const from = `${ectx.principal.name} <${ectx.principal.username}@${env.EMAIL_DOMAIN}>`;
+
+    // Strip threadId before passing to Resend (not a Resend field).
+    const { threadId, ...sendPayload } = email;
+
     // Cast needed: Omit over a discriminated union loses branch structure.
-    await resend.emails.send({ ...email, from } as CreateEmailOptions);
+    const { data } = await resend.emails.send({ ...sendPayload, from } as CreateEmailOptions);
+
+    // Persist the outbound email in the thread.
+    if (threadId) {
+      await insertMessage({
+        content: email.text,
+        metadata: {
+          cc: email.cc,
+          from,
+          messageId: data?.id,
+          subject: email.subject,
+          to: email.to,
+        },
+        role: "assistant",
+        threadId,
+      });
+    }
   },
   setup: async () => {},
 
