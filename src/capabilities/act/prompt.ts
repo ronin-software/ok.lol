@@ -7,7 +7,7 @@ import type { Document, OriginExecutionContext } from "../context";
  *
  * Documents are injected by priority (lower first) up to a total char
  * budget. Large documents are truncated with a marker. Omitted documents
- * are noted so the agent knows to use `read_document` for full content.
+ * are noted so the agent knows to use `document_read` for full content.
  */
 
 /** Max characters per individual document before truncation. */
@@ -18,7 +18,7 @@ const BUDGET_TOTAL = 24_000;
 
 /** Marker appended when a document is truncated. */
 const TRUNCATION_MARKER =
-  "\n\n[... truncated — use read_document to load the full content]";
+  "\n\n[... truncated — use document_read to load the full content]";
 
 /** Options for prompt assembly. */
 export type PromptOptions = {
@@ -62,7 +62,7 @@ export function assemblePrompt(options: PromptOptions): string {
   if (omitted.length > 0) {
     const paths = omitted.map((d) => d.path).join(", ");
     parts.push(
-      `## Omitted Documents\n\nThe following documents exceeded the context budget and were not injected: ${paths}.\nUse \`read_document\` to load them on demand.`,
+      `## Omitted Documents\n\nThe following documents exceeded the context budget and were not injected: ${paths}.\nUse \`document_read\` to load them on demand.`,
     );
   }
 

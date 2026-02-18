@@ -26,7 +26,7 @@ type ListInput = z.infer<typeof listInput>;
 type ListOutput = z.infer<typeof listOutput>;
 
 /** List all document paths for this principal. */
-export const listDocuments: Capability<OriginExecutionContext, ListInput, ListOutput> = {
+export const documentList: Capability<OriginExecutionContext, ListInput, ListOutput> = {
   async call(ectx) {
     // DISTINCT ON picks the latest row per path without fetching all versions.
     const rows = await db.execute<{ path: string }>(sql`
@@ -40,7 +40,7 @@ export const listDocuments: Capability<OriginExecutionContext, ListInput, ListOu
   },
 
   description: "List all your document paths",
-  name: "list_documents",
+  name: "document_list",
 
   inputSchema: listInput,
   outputSchema: listOutput,
@@ -65,7 +65,7 @@ type ReadInput = z.infer<typeof readInput>;
 type ReadOutput = z.infer<typeof readOutput>;
 
 /** Read a single document by path. Returns the latest version. */
-export const readDocument: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
+export const documentRead: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
   async call(ectx, { path }) {
     assert(path.length > 0, "path must be non-empty");
 
@@ -93,7 +93,7 @@ export const readDocument: Capability<OriginExecutionContext, ReadInput, ReadOut
   },
 
   description: "Read one of your documents by path. Returns the latest version",
-  name: "read_document",
+  name: "document_read",
 
   inputSchema: readInput,
   outputSchema: readOutput,
@@ -116,7 +116,7 @@ type WriteInput = z.infer<typeof writeInput>;
 type WriteOutput = z.infer<typeof writeOutput>;
 
 /** Write or update a document. Inserts a new version (append-only). */
-export const writeDocument: Capability<OriginExecutionContext, WriteInput, WriteOutput> = {
+export const documentWrite: Capability<OriginExecutionContext, WriteInput, WriteOutput> = {
   async call(ectx, { content, path }) {
     assert(path.length > 0, "path must be non-empty");
     assert(content.length > 0, "content must be non-empty");
@@ -132,7 +132,7 @@ export const writeDocument: Capability<OriginExecutionContext, WriteInput, Write
   },
 
   description: "Write or update one of your documents. Creates a new version",
-  name: "write_document",
+  name: "document_write",
 
   inputSchema: writeInput,
   outputSchema: writeOutput,

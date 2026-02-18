@@ -44,7 +44,7 @@ const listOutput = z.object({
 type ListInput = z.infer<typeof listInput>;
 type ListOutput = z.infer<typeof listOutput>;
 
-export const listThreads: Capability<OriginExecutionContext, ListInput, ListOutput> = {
+export const threadList: Capability<OriginExecutionContext, ListInput, ListOutput> = {
   async call(ectx, input) {
     const rows = await recentThreads(ectx.principal.id, {
       channel: input.channel,
@@ -63,7 +63,7 @@ export const listThreads: Capability<OriginExecutionContext, ListInput, ListOutp
   },
 
   description: "List recent conversation threads with latest snippet",
-  name: "list_threads",
+  name: "thread_list",
 
   inputSchema: listInput,
   outputSchema: listOutput,
@@ -91,7 +91,7 @@ const searchOutput = z.object({
 type SearchInput = z.infer<typeof searchInput>;
 type SearchOutput = z.infer<typeof searchOutput>;
 
-export const searchThreads: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
+export const threadSearch: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
   async call(ectx, input) {
     assert(input.query.length > 0, "query must be non-empty");
 
@@ -113,7 +113,7 @@ export const searchThreads: Capability<OriginExecutionContext, SearchInput, Sear
   },
 
   description: "Search message content across all your threads",
-  name: "search_threads",
+  name: "thread_search",
 
   inputSchema: searchInput,
   outputSchema: searchOutput,
@@ -124,7 +124,7 @@ export const searchThreads: Capability<OriginExecutionContext, SearchInput, Sear
 // –
 
 const readInput = z.object({
-  threadId: z.string().uuid().describe("Thread ID to read"),
+  threadId: z.uuid().describe("Thread ID to read"),
 });
 
 const readOutput = z.object({
@@ -140,7 +140,7 @@ const readOutput = z.object({
 type ReadInput = z.infer<typeof readInput>;
 type ReadOutput = z.infer<typeof readOutput>;
 
-export const readThread: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
+export const threadRead: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
   async call(_ectx, input) {
     const rows = await activeContext(input.threadId);
 
@@ -156,7 +156,7 @@ export const readThread: Capability<OriginExecutionContext, ReadInput, ReadOutpu
   },
 
   description: "Read the active context of a thread (summaries + unsummarized messages)",
-  name: "read_thread",
+  name: "thread_read",
 
   inputSchema: readInput,
   outputSchema: readOutput,
@@ -183,7 +183,7 @@ const expandOutput = z.object({
 type ExpandInput = z.infer<typeof expandInput>;
 type ExpandOutput = z.infer<typeof expandOutput>;
 
-export const expandSummary: Capability<OriginExecutionContext, ExpandInput, ExpandOutput> = {
+export const threadSummaryExpand: Capability<OriginExecutionContext, ExpandInput, ExpandOutput> = {
   async call(_ectx, input) {
     const rows = input.recursive
       ? await expandTree(input.summaryId)
@@ -200,7 +200,7 @@ export const expandSummary: Capability<OriginExecutionContext, ExpandInput, Expa
   },
 
   description: "Expand a summary into its children (or recursively to leaf messages)",
-  name: "expand",
+  name: "thread_summary_expand",
 
   inputSchema: expandInput,
   outputSchema: expandOutput,

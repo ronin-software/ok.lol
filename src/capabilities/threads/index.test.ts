@@ -4,7 +4,7 @@ import { z } from "zod";
 import { withDefaults } from "../documents/defaults";
 import { assemblePrompt } from "../act/prompt";
 import emailSend from "../email/email.send";
-import { followUp, listThreads, searchThreads } from "./index";
+import { followUp, threadList, threadSearch } from "./index";
 
 /**
  * Tests for the `followUp` capability and the model's ability to use it.
@@ -29,7 +29,7 @@ function model() {
 /** System prompt matching the origin toolset available during email-receive. */
 function systemWithFollowUp() {
   return assemblePrompt({
-    capabilities: [emailSend, followUp, listThreads, searchThreads],
+    capabilities: [emailSend, followUp, threadList, threadSearch],
     credits: 1_000_000n,
     domain: "ok.lol",
     documents: withDefaults([]),
@@ -108,13 +108,22 @@ describe.skipIf(!HAS_API_KEY)("follow-up behavior (model)", () => {
     let emailCalled = false;
 
     const tools = {
+      email_send: tool({
+        description: emailSend.description,
+        execute: async () => { emailCalled = true; },
+        inputSchema: z.object({
+          subject: z.string(),
+          text: z.string(),
+          to: z.string(),
+        }),
+      }),
       follow_up: tool({
         description: followUp.description,
         execute: async (args) => { followUpArgs = args; },
         inputSchema: z.object({ content: z.string(), threadId: z.string() }),
       }),
-      list_threads: tool({
-        description: listThreads.description,
+      thread_list: tool({
+        description: threadList.description,
         execute: async () => ({
           threads: [{
             channel: "chat",
@@ -129,8 +138,8 @@ describe.skipIf(!HAS_API_KEY)("follow-up behavior (model)", () => {
           limit: z.number().optional(),
         }),
       }),
-      search_threads: tool({
-        description: searchThreads.description,
+      thread_search: tool({
+        description: threadSearch.description,
         execute: async () => ({
           results: [{
             content: "Email Alice about the contract proposal and let me know when she replies",
@@ -141,15 +150,6 @@ describe.skipIf(!HAS_API_KEY)("follow-up behavior (model)", () => {
           }],
         }),
         inputSchema: z.object({ limit: z.number().optional(), query: z.string() }),
-      }),
-      send_email: tool({
-        description: emailSend.description,
-        execute: async () => { emailCalled = true; },
-        inputSchema: z.object({
-          subject: z.string(),
-          text: z.string(),
-          to: z.string(),
-        }),
       }),
     };
 
@@ -185,8 +185,8 @@ describe.skipIf(!HAS_API_KEY)("follow-up behavior (model)", () => {
         execute: async () => { followUpCalled = true; },
         inputSchema: z.object({ content: z.string(), threadId: z.string() }),
       }),
-      list_threads: tool({
-        description: listThreads.description,
+      thread_list: tool({
+        description: threadList.description,
         execute: async () => ({
           threads: [{
             channel: "email",
@@ -201,8 +201,8 @@ describe.skipIf(!HAS_API_KEY)("follow-up behavior (model)", () => {
           limit: z.number().optional(),
         }),
       }),
-      search_threads: tool({
-        description: searchThreads.description,
+      thread_search: tool({
+        description: threadSearch.description,
         execute: async () => ({ results: [] }),
         inputSchema: z.object({ limit: z.number().optional(), query: z.string() }),
       }),

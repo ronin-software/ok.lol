@@ -61,12 +61,12 @@ describe.skipIf(!HAS_DB)("persistOutput", () => {
       toolCalls: [{
         input: { email: "a@b.com" },
         toolCallId: "call-1",
-        toolName: "lookup_contact",
+        toolName: "contact_lookup",
       }],
       toolResults: [{
         result: { name: "Alice" },
         toolCallId: "call-1",
-        toolName: "lookup_contact",
+        toolName: "contact_lookup",
       }],
     }];
 
@@ -89,7 +89,7 @@ describe.skipIf(!HAS_DB)("persistOutput", () => {
       output: { name: "Alice" },
       state: "output-available",
       toolCallId: "call-1",
-      toolName: "lookup_contact",
+      toolName: "contact_lookup",
       type: "dynamic-tool",
     });
 
@@ -102,12 +102,12 @@ describe.skipIf(!HAS_DB)("persistOutput", () => {
       toolCalls: [{
         input: {},
         toolCallId: "call-2",
-        toolName: "list_threads",
+        toolName: "thread_list",
       }],
       toolResults: [{
         result: "3 threads",
         toolCallId: "call-2",
-        toolName: "list_threads",
+        toolName: "thread_list",
       }],
     }];
 

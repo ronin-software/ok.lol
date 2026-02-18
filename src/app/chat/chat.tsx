@@ -361,20 +361,21 @@ function MessageBubble({ message }: { message: UIMessage }) {
 // –
 
 const toolLabels: Record<string, { active: string; done: string }> = {
-  expand:           { active: "Expanding summary",   done: "Expanded summary" },
-  http_get:         { active: "Fetching URL",        done: "Fetched URL" },
-  list_contacts:    { active: "Listing contacts",    done: "Listed contacts" },
-  list_documents:   { active: "Listing documents",   done: "Listed documents" },
-  list_threads:     { active: "Listing threads",     done: "Listed threads" },
-  lookup_contact:   { active: "Looking up contact",  done: "Looked up contact" },
-  lookup_owner:     { active: "Looking up owner",    done: "Looked up owner" },
-  read_document:    { active: "Reading document",    done: "Read document" },
-  read_thread:      { active: "Reading thread",      done: "Read thread" },
-  record_contact:   { active: "Recording contact",   done: "Recorded contact" },
-  search_contacts:  { active: "Searching contacts",  done: "Searched contacts" },
-  search_threads:   { active: "Searching threads",   done: "Searched threads" },
-  send_email:       { active: "Sending email",       done: "Sent email" },
-  write_document:   { active: "Writing document",    done: "Wrote document" },
+  contact_list:    { active: "Listing contacts",    done: "Listed contacts" },
+  contact_lookup:  { active: "Looking up contact",  done: "Looked up contact" },
+  contact_record:  { active: "Recording contact",   done: "Recorded contact" },
+  contact_search:  { active: "Searching contacts",  done: "Searched contacts" },
+  document_list:   { active: "Listing documents",   done: "Listed documents" },
+  document_read:   { active: "Reading document",    done: "Read document" },
+  document_write:  { active: "Writing document",    done: "Wrote document" },
+  email_send:      { active: "Sending email",       done: "Sent email" },
+  follow_up:       { active: "Following up",        done: "Followed up" },
+  http_get:        { active: "Fetching URL",        done: "Fetched URL" },
+  contact_lookup_owner:    { active: "Looking up owner",    done: "Looked up owner" },
+  thread_summary_expand:   { active: "Expanding summary",   done: "Expanded summary" },
+  thread_list:     { active: "Listing threads",     done: "Listed threads" },
+  thread_read:     { active: "Reading thread",      done: "Read thread" },
+  thread_search:   { active: "Searching threads",   done: "Searched threads" },
 };
 
 function ToolChip({ part }: { part: ToolPart }) {

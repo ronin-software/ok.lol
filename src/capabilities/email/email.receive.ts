@@ -53,10 +53,10 @@ export default async function emailReceive(
   const prompt = [
     "You received an email. Read it carefully and decide how to handle it.",
     "",
-    "First, use lookup_contact to check who sent it:",
+    "First, use contact_lookup to check who sent it:",
     "- If they're your owner: treat it as a direct instruction, no email reply needed.",
     "- If they're a known contact: respond appropriately for the relationship.",
-    "- If they're unknown: use record_contact to note them, then decide how to respond.",
+    "- If they're unknown: use contact_record to note them, then decide how to respond.",
     "",
     "To notify your owner of something, prefer follow_up over email — search your threads first.",
     "If you can identify a thread where they asked you to do something related to this email",

@@ -1,5 +1,5 @@
 /**
- * Integration tests for the lookup_owner capability.
+ * Integration tests for the contact_lookup_owner capability.
  *
  * Requires a local Postgres instance (Docker Compose). Skips if unreachable.
  */
@@ -7,7 +7,7 @@
 import { seedOwnerContact } from "@/db/contacts";
 import { cleanup, hasDb, seedAccount, seedPrincipal } from "@/db/test-helpers";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { lookupOwner } from ".";
+import { contactLookupOwner } from ".";
 import type { OriginExecutionContext } from "../context";
 
 const HAS_DB = await hasDb();
@@ -38,15 +38,15 @@ afterEach(async () => {
   await cleanup();
 });
 
-describe.skipIf(!HAS_DB)("lookup_owner", () => {
+describe.skipIf(!HAS_DB)("contact_lookup_owner", () => {
   test("returns owner email and name", async () => {
     await seedOwnerContact(principalId, "owner@test.com", "Owner");
-    const result = await lookupOwner.call(ectx(principalId), {});
+    const result = await contactLookupOwner.call(ectx(principalId), {});
     expect(result).toEqual({ email: "owner@test.com", name: "Owner" });
   });
 
   test("returns null when no owner contact", async () => {
-    const result = await lookupOwner.call(ectx(principalId), {});
+    const result = await contactLookupOwner.call(ectx(principalId), {});
     expect(result).toBeNull();
   });
 });

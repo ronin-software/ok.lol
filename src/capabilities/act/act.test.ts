@@ -3,13 +3,13 @@ import { generateText, stepCountIs, tool } from "ai";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { Document } from "../context";
-import { listDocuments, readDocument, writeDocument } from "../documents";
+import { documentList, documentRead, documentWrite } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
 import emailSend from "../email/email.send";
 import { assemblePrompt, type PromptOptions } from "./prompt";
 
 /** Capabilities for test prompt assembly. */
-const testCapabilities = [emailSend, listDocuments, readDocument, writeDocument];
+const testCapabilities = [emailSend, documentList, documentRead, documentWrite];
 
 /**
  * Tests for the `act` capability's context injection, document discovery,
@@ -163,10 +163,10 @@ describe("assemblePrompt", () => {
     // First document present (fits in budget).
     expect(prompt).toContain("## first");
     // Second may be truncated or omitted.
-    // The omitted section should mention read_document if fully omitted.
+    // The omitted section should mention document_read if fully omitted.
     if (!prompt.includes("## second")) {
       expect(prompt).toContain("Omitted Documents");
-      expect(prompt).toContain("read_document");
+      expect(prompt).toContain("document_read");
     }
   });
 
@@ -181,10 +181,10 @@ describe("assemblePrompt", () => {
   test("includes capabilities directory", () => {
     const prompt = assemblePrompt(options());
     expect(prompt).toContain("## Tools");
-    expect(prompt).toContain("send_email");
-    expect(prompt).toContain("read_document");
-    expect(prompt).toContain("write_document");
-    expect(prompt).toContain("list_documents");
+    expect(prompt).toContain("email_send");
+    expect(prompt).toContain("document_read");
+    expect(prompt).toContain("document_write");
+    expect(prompt).toContain("document_list");
   });
 
   test("marks default documents in headers", () => {
@@ -248,10 +248,10 @@ describe.skipIf(!HAS_API_KEY)("document discovery (model)", () => {
     expect(system).not.toContain("ALPHA-7749");
     expect(system).toContain("[... truncated");
 
-    // Provide read_document that returns the full content.
+    // Provide document_read that returns the full content.
     let readCalled = false;
     const tools = {
-      read_document: tool({
+      document_read: tool({
         description: "Read a document by path.",
         execute: async () => {
           readCalled = true;
@@ -281,13 +281,13 @@ describe.skipIf(!HAS_API_KEY)("document discovery (model)", () => {
 // –
 
 describe.skipIf(!HAS_API_KEY)("capability calling (model)", () => {
-  test("calls send_email when asked to send an email", async () => {
+  test("calls email_send when asked to send an email", async () => {
     const docs = withDefaults([]);
     const system = assemblePrompt(options({ documents: docs }));
 
     let emailArgs: Record<string, string> | undefined;
     const tools = {
-      send_email: tool({
+      email_send: tool({
         description: "Send an email from your @ok.lol address.",
         execute: async (args) => {
           emailArgs = args;
@@ -317,15 +317,15 @@ describe.skipIf(!HAS_API_KEY)("capability calling (model)", () => {
 
   test("does not hallucinate tools it was not given", async () => {
     const docs = withDefaults([]);
-    // Only provide read_document — no send_email.
+    // Only provide document_read — no email_send.
     const system = assemblePrompt(options({
-      capabilities: [{ description: "Read a document", name: "read_document" }],
+      capabilities: [{ description: "Read a document", name: "document_read" }],
       documents: docs,
     }));
 
     let toolCalled = false;
     const tools = {
-      read_document: tool({
+      document_read: tool({
         description: "Read a document by path.",
         execute: async () => {
           toolCalled = true;
@@ -354,13 +354,13 @@ describe.skipIf(!HAS_API_KEY)("capability calling (model)", () => {
     expect(explainsLimitation).toBe(true);
   }, MODEL_TIMEOUT);
 
-  test("calls write_document to update its own documents", async () => {
+  test("calls document_write to update its own documents", async () => {
     const docs = withDefaults([]);
     const system = assemblePrompt(options({ documents: docs }));
 
     let writeArgs: { content: string; path: string } | undefined;
     const tools = {
-      write_document: tool({
+      document_write: tool({
         description: "Write or update a document.",
         execute: async (args) => {
           writeArgs = args;

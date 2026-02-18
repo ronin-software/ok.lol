@@ -1,4 +1,6 @@
+import { findOwnerContact } from "@/db/contacts";
 import { createThread, findEmailThread, insertMessage } from "@/db/threads";
+import { assert } from "@/lib/assert";
 import { env } from "@/lib/env";
 import { normalizeSubject } from "@/lib/email";
 import type { Capability } from "@ok.lol/capability";
@@ -23,7 +25,8 @@ const inputSchema = z.object({
   text: z.string().describe("Plain text email body"),
   /** Thread to persist this email in. Omit for fire-and-forget sends. */
   threadId: z.uuid().optional().describe("Thread ID to persist this email in"),
-  to: z.email().describe("Recipient email address"),
+  /** Recipient email address, or "owner" to send to the account holder. */
+  to: z.union([z.email(), z.literal("owner")]).describe('Recipient email address, or "owner" to send to the account holder'),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -35,18 +38,21 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
   async call(ectx, email) {
     const from = `${ectx.principal.name} <${ectx.principal.username}@${env.EMAIL_DOMAIN}>`;
 
-    // Strip threadId before passing to Resend (not a Resend field).
-    const { threadId, ...sendPayload } = email;
+    // Resolve "owner" sentinel to the account holder's actual address.
+    const toAddress = email.to === "owner"
+      ? await resolveOwnerEmail(ectx.principal.id)
+      : email.to;
 
-    // Cast needed: Omit over a discriminated union loses branch structure.
-    const { data } = await resend.emails.send({ ...sendPayload, from } as CreateEmailOptions);
+    // Strip non-Resend fields before sending.
+    const { threadId, to: _to, ...rest } = email;
+    const { data } = await resend.emails.send({ ...rest, from, to: toAddress } as CreateEmailOptions);
 
     const meta = {
       cc: email.cc,
       from,
       messageId: data?.id,
       subject: email.subject,
-      to: email.to,
+      to: toAddress,
     };
 
     // Always persist in an email thread so the reply lands in the same thread
@@ -65,10 +71,21 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
   },
 
   description: `Sends an email from the principal's @${env.EMAIL_DOMAIN} address`,
-  name: "send_email",
+  name: "email_send",
 
   inputSchema,
   outputSchema,
 };
 
 export default emailSend;
+
+// –
+// Helpers
+// –
+
+/** Resolves the principal's owner contact to an email address. */
+async function resolveOwnerEmail(principalId: string): Promise<string> {
+  const owner = await findOwnerContact(principalId);
+  assert(owner?.email != null, "Owner contact email not set — cannot send to owner");
+  return owner.email;
+}

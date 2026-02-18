@@ -11,43 +11,43 @@ import { assert } from "@/lib/assert";
 import { toTool, type Capability } from "@ok.lol/capability";
 import type { Tool } from "ai";
 import {
-  listContacts,
-  lookupContact,
-  lookupOwner,
-  recordContact,
-  searchContacts,
+  contactList,
+  contactLookup,
+  contactLookupOwner,
+  contactRecord,
+  contactSearch,
 } from "../contacts";
 import type { OriginExecutionContext } from "../context";
-import { listDocuments, readDocument, writeDocument } from "../documents";
+import { documentList, documentRead, documentWrite } from "../documents";
 import emailSend from "../email/email.send";
 import httpGet from "../http";
 import { logCall } from "../log";
 import {
-  expandSummary,
   followUp,
-  listThreads,
-  readThread,
-  searchThreads,
+  threadList,
+  threadRead,
+  threadSearch,
+  threadSummaryExpand,
 } from "../threads";
 import * as workers from "./workers";
 
 /** Origin capabilities exposed as tools. */
 const ORIGIN_CAPABILITIES = [
+  contactList,
+  contactLookup,
+  contactLookupOwner,
+  contactRecord,
+  contactSearch,
+  documentList,
+  documentRead,
+  documentWrite,
   emailSend,
-  expandSummary,
   followUp,
   httpGet,
-  listContacts,
-  listDocuments,
-  listThreads,
-  lookupContact,
-  lookupOwner,
-  readDocument,
-  readThread,
-  recordContact,
-  searchContacts,
-  searchThreads,
-  writeDocument,
+  threadList,
+  threadRead,
+  threadSearch,
+  threadSummaryExpand,
 ];
 
 /** Wrap a tool's execute with automatic logging. */

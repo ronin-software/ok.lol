@@ -32,14 +32,14 @@ const listOutput = z.array(contactRow);
 type ListOutput = z.infer<typeof listOutput>;
 
 /** Return every contact for the current principal. */
-export const listContacts: Capability<OriginExecutionContext, Record<string, never>, ListOutput> = {
+export const contactList: Capability<OriginExecutionContext, Record<string, never>, ListOutput> = {
   async call(ectx) {
     return allContacts(ectx.principal.id);
   },
 
   description:
     "List all known contacts — names, emails, and relationships (owner/contact).",
-  name: "list_contacts",
+  name: "contact_list",
 
   inputSchema: z.object({}),
   outputSchema: listOutput,
@@ -60,14 +60,14 @@ type SearchInput = z.infer<typeof searchInput>;
 type SearchOutput = z.infer<typeof searchOutput>;
 
 /** Search contacts by name or email (case-insensitive substring match). */
-export const searchContacts: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
+export const contactSearch: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
   async call(ectx, input) {
     return searchContactsDB(ectx.principal.id, input.query);
   },
 
   description:
     "Search contacts by name or email. Returns matching contacts.",
-  name: "search_contacts",
+  name: "contact_search",
 
   inputSchema: searchInput,
   outputSchema: searchOutput,
@@ -99,7 +99,7 @@ type LookupOutput = z.infer<typeof lookupOutput>;
  * trust level (owner vs unknown) and to find existing notes.
  * Returns null if the email is not in the contact list.
  */
-export const lookupContact: Capability<OriginExecutionContext, LookupInput, LookupOutput> = {
+export const contactLookup: Capability<OriginExecutionContext, LookupInput, LookupOutput> = {
   async call(ectx, input) {
     const row = await findContact(ectx.principal.id, input.email);
     if (!row) return null;
@@ -114,7 +114,7 @@ export const lookupContact: Capability<OriginExecutionContext, LookupInput, Look
   description:
     "Look up a contact by email — returns their name, relationship (owner/contact), " +
     "and the document path for notes. Returns null if unknown.",
-  name: "lookup_contact",
+  name: "contact_lookup",
 
   inputSchema: lookupInput,
   outputSchema: lookupOutput,
@@ -132,13 +132,13 @@ const recordInput = z.object({
 type RecordInput = z.infer<typeof recordInput>;
 
 /** Add a new contact or confirm an existing one. Does not overwrite existing records. */
-export const recordContact: Capability<OriginExecutionContext, RecordInput, void> = {
+export const contactRecord: Capability<OriginExecutionContext, RecordInput, void> = {
   async call(ectx, input) {
     await upsertContact(ectx.principal.id, input);
   },
 
   description: "Record a new contact (name + email). No-op if the contact already exists.",
-  name: "record_contact",
+  name: "contact_record",
 
   inputSchema: recordInput,
   outputSchema: z.void(),
@@ -159,7 +159,7 @@ type OwnerOutput = z.infer<typeof ownerOutput>;
  * Look up the account holder (owner) for the current principal.
  * Zero-input tool — the principal is implicit from the execution context.
  */
-export const lookupOwner: Capability<OriginExecutionContext, Record<string, never>, OwnerOutput> = {
+export const contactLookupOwner: Capability<OriginExecutionContext, Record<string, never>, OwnerOutput> = {
   async call(ectx) {
     const row = await findOwnerContact(ectx.principal.id);
     if (!row || !row.email) return null;
@@ -169,7 +169,7 @@ export const lookupOwner: Capability<OriginExecutionContext, Record<string, neve
   description:
     "Look up the account holder's email and name. " +
     "Use this when you need to contact or identify the owner without knowing their email.",
-  name: "lookup_owner",
+  name: "contact_lookup_owner",
 
   inputSchema: z.object({}),
   outputSchema: ownerOutput,
