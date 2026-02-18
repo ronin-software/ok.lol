@@ -6,13 +6,18 @@
  * Every inbound POST must carry a valid X-Signature-256 header.
  * GET / returns the capability directory and hostname (no auth).
  *
- * Environment:
- *   WORKER_TOKEN  — "<id>:<secret>" from the dashboard (required)
+ * Token resolution order (first wins):
+ *   1. WORKER_TOKEN env var — "<id>:<secret>"
+ *   2. First positional arg  — saved to ~/.ok.lol/token for future runs
+ *   3. ~/.ok.lol/token config file
+ *
+ * Other env:
  *   WORKER_NAME   — Override reported hostname (default: os.hostname())
  *   PORT          — Listen port (default 7420)
  */
 
 import { hostname } from "node:os";
+import { join } from "node:path";
 import {
   handle,
   hmac,
@@ -44,9 +49,38 @@ function log(tag: string, ...args: string[]) {
 // Configuration
 // –
 
-const TOKEN = process.env.WORKER_TOKEN;
+const CONFIG_PATH = join(
+  process.env.HOME ?? "~",
+  ".ok.lol",
+  "token",
+);
+
+/** Resolve token from env → argv → config file. Saves argv token to config. */
+async function resolveToken(): Promise<string | null> {
+  // 1. Environment variable.
+  if (process.env.WORKER_TOKEN) return process.env.WORKER_TOKEN;
+
+  // 2. Positional arg — save to config for future runs.
+  const arg = process.argv[2];
+  if (arg?.includes(":")) {
+    await Bun.write(CONFIG_PATH, arg);
+    console.log(`token saved to ${CONFIG_PATH}`);
+    return arg;
+  }
+
+  // 3. Config file.
+  const file = Bun.file(CONFIG_PATH);
+  if (await file.exists()) return (await file.text()).trim();
+
+  return null;
+}
+
+const TOKEN = await resolveToken();
 if (!TOKEN || !TOKEN.includes(":")) {
-  console.error("WORKER_TOKEN is required (format: <id>:<secret>)");
+  console.error(
+    "no token found — run: workerd <id>:<secret>\n" +
+    "get your token from https://ok.lol/dashboard",
+  );
   process.exit(1);
 }
 

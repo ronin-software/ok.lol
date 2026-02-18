@@ -105,7 +105,6 @@ function WorkerRow({
   const pending = worker.name == null;
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // Poll for name while pending.
   const onConnectedRef = useRef(onConnected);
@@ -136,7 +135,8 @@ function WorkerRow({
   if (pending) {
     const token = `${worker.id}:${worker.secret}`;
     const base = (process.env.NEXT_PUBLIC_BASE_URL ?? "https://ok.lol").replace(/^https?:\/\//, "");
-    const cmd = `curl -fsSL ${base}/install|sh&&WORKER_TOKEN=${token} workerd`;
+    const installCmd = `curl -fsSL ${base}/install | bash`;
+    const runCmd = `workerd ${token}`;
 
     return (
       <div className="mt-3 rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 py-3">
@@ -158,20 +158,8 @@ function WorkerRow({
             {deleting ? "…" : "Cancel"}
           </button>
         </div>
-        <div className="mt-2 flex items-center gap-2">
-          <pre className="flex-1 overflow-x-auto rounded bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-300">
-            {cmd}
-          </pre>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(cmd);
-              setCopied(true);
-            }}
-            className={BUTTON_OUTLINE}
-          >
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
+        <CmdRow label="1. Install" cmd={installCmd} />
+        <CmdRow label="2. Run" cmd={runCmd} />
       </div>
     );
   }
@@ -206,6 +194,35 @@ function WorkerRow({
           Remove
         </button>
       )}
+    </div>
+  );
+}
+
+// –
+// CmdRow
+// –
+
+/** A labelled command line with a copy button. */
+function CmdRow({ cmd, label }: { cmd: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-2">
+      <p className="mb-1 text-xs text-zinc-500">{label}</p>
+      <div className="flex items-center gap-2">
+        <pre className="flex-1 overflow-x-auto rounded bg-zinc-900 px-3 py-2 font-mono text-xs text-zinc-300">
+          {cmd}
+        </pre>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(cmd);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className={BUTTON_OUTLINE}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
     </div>
   );
 }

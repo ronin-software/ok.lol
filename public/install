@@ -4,15 +4,23 @@
 # Usage:
 #   curl -fsSL https://ok.lol/install | bash
 #
-# Installs the latest workerd binary to ~/.ok.lol/bin and adds it to PATH.
+# Note: must be piped to bash, not sh.
 
 set -euo pipefail
 
 REPO="ronin-software/ok.lol"
-INSTALL_DIR="$HOME/.ok.lol/bin"
+FALLBACK_DIR="$HOME/.ok.lol/bin"
 
 # –
-# Platform detection
+# Helpers
+# –
+
+status() { printf '\r\033[K%s' "$1"; }
+nl()     { printf '\n'; }
+die()    { nl; echo "error: $*" >&2; exit 1; }
+
+# –
+# Platform
 # –
 
 detect_platform() {
@@ -23,19 +31,13 @@ detect_platform() {
   case "$os" in
     Darwin) os="darwin" ;;
     Linux)  os="linux"  ;;
-    *)
-      echo "error: unsupported OS: $os" >&2
-      exit 1
-      ;;
+    *) die "unsupported OS: $os" ;;
   esac
 
   case "$arch" in
     arm64 | aarch64) arch="arm64" ;;
     x86_64)          arch="x64"   ;;
-    *)
-      echo "error: unsupported architecture: $arch" >&2
-      exit 1
-      ;;
+    *) die "unsupported architecture: $arch" ;;
   esac
 
   echo "${os}-${arch}"
@@ -46,104 +48,89 @@ detect_platform() {
 # –
 
 latest_tag() {
-  local url="https://api.github.com/repos/${REPO}/releases"
   local tag
-
   tag="$(
-    curl -fsSL "$url?per_page=10" \
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=10" \
       -H "Accept: application/vnd.github+json" \
     | grep -o '"tag_name": *"worker-v[^"]*"' \
     | head -1 \
     | cut -d'"' -f4
   )"
-
-  if [ -z "$tag" ]; then
-    echo "error: no worker release found" >&2
-    exit 1
-  fi
-
+  [ -n "$tag" ] || die "no worker release found"
   echo "$tag"
 }
 
 # –
-# Install
+# Install dir
 # –
 
-main() {
-  local platform tag artifact_url target
+# Prefer a writable user-owned dir already on PATH so no shell reload is needed.
+# Falls back to $FALLBACK_DIR, which requires a PATH update.
+pick_install_dir() {
+  local dir
+  while IFS= read -r dir; do
+    [[ "$dir" == "$HOME"* ]] && [ -d "$dir" ] && [ -w "$dir" ] && echo "$dir" && return
+  done < <(tr ':' '\n' <<< "$PATH")
+  echo "$FALLBACK_DIR"
+}
 
-  platform="$(detect_platform)"
-  echo "detected platform: $platform"
+# Append FALLBACK_DIR to the shell profile. Prints the reload command.
+add_to_path() {
+  local line="export PATH=\"${FALLBACK_DIR}:\$PATH\""
 
-  tag="$(latest_tag)"
-  echo "latest release: $tag"
-
-  artifact_url="https://github.com/${REPO}/releases/download/${tag}/workerd-${platform}"
-  target="${INSTALL_DIR}/workerd"
-
-  mkdir -p "$INSTALL_DIR"
-
-  echo "downloading workerd..."
-  curl -fsSL "$artifact_url" -o "$target"
-  chmod +x "$target"
-
-  echo "installed to $target"
-
-  # Add to PATH if not already present.
-  add_to_path
-
-  echo ""
-  echo "workerd installed! Run it with:"
-  echo ""
-  echo "  WORKER_SECRET=<your-secret> workerd"
-  echo ""
-  echo "Create a worker at https://ok.lol/dashboard to get your secret."
+  case "${SHELL:-}" in
+    */zsh)
+      local profile="$HOME/.zshrc"
+      grep -qF "$FALLBACK_DIR" "$profile" 2>/dev/null || printf '\n# ok.lol\n%s\n' "$line" >> "$profile"
+      echo "exec \$SHELL"
+      ;;
+    */bash)
+      local profile
+      profile="$([ -f "$HOME/.bash_profile" ] && echo "$HOME/.bash_profile" || echo "$HOME/.bashrc")"
+      grep -qF "$FALLBACK_DIR" "$profile" 2>/dev/null || printf '\n# ok.lol\n%s\n' "$line" >> "$profile"
+      echo "source $profile"
+      ;;
+    */fish)
+      local fish_conf="$HOME/.config/fish/conf.d"
+      mkdir -p "$fish_conf"
+      echo "set -gx PATH ${FALLBACK_DIR} \$PATH" > "$fish_conf/ok-lol.fish"
+      echo "exec \$SHELL"
+      ;;
+    *)
+      echo "  add $FALLBACK_DIR to your PATH"
+      ;;
+  esac
 }
 
 # –
-# PATH
+# Main
 # –
 
-add_to_path() {
-  # Already on PATH — nothing to do.
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-    return
-  fi
+main() {
+  status "resolving…"
+  local platform tag install_dir
+  platform="$(detect_platform)"
+  tag="$(latest_tag)"
+  install_dir="$(pick_install_dir)"
 
-  local line="export PATH=\"${INSTALL_DIR}:\$PATH\""
-  local profile=""
+  mkdir -p "$install_dir"
 
-  # Detect shell profile.
-  case "${SHELL:-}" in
-    */zsh)  profile="$HOME/.zshrc"     ;;
-    */bash)
-      if [ -f "$HOME/.bash_profile" ]; then
-        profile="$HOME/.bash_profile"
-      else
-        profile="$HOME/.bashrc"
-      fi
-      ;;
-    */fish)
-      # Fish uses a different syntax.
-      local fish_conf="$HOME/.config/fish/conf.d"
-      mkdir -p "$fish_conf"
-      echo "set -gx PATH ${INSTALL_DIR} \$PATH" > "$fish_conf/ok-lol.fish"
-      echo "added ${INSTALL_DIR} to PATH (fish)"
-      return
-      ;;
-    *)
-      echo "add ${INSTALL_DIR} to your PATH manually"
-      return
-      ;;
-  esac
+  status "downloading ${tag}…"
+  curl -fsSL \
+    "https://github.com/${REPO}/releases/download/${tag}/workerd-${platform}" \
+    -o "$install_dir/workerd"
+  chmod +x "$install_dir/workerd"
 
-  if [ -n "$profile" ]; then
-    echo "" >> "$profile"
-    echo "# ok.lol worker daemon" >> "$profile"
-    echo "$line" >> "$profile"
-    echo "added ${INSTALL_DIR} to PATH in $profile"
-    # shellcheck disable=SC1090
-    source "$profile" 2>/dev/null || true
+  nl
+
+  if [[ "$install_dir" == "$FALLBACK_DIR" ]]; then
+    # Not on PATH yet — update profile and tell the user to reload.
+    local reload
+    reload="$(add_to_path)"
+    printf '\033[1mworkerd installed.\033[0m Reload your shell first: \033[1m%s\033[0m\n' "$reload"
+    printf 'Then run: workerd <token>\n'
+  else
+    printf '\033[1mworkerd installed.\033[0m Run: workerd <token>\n'
   fi
 }
 
