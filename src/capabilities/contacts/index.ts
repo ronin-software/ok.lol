@@ -6,10 +6,72 @@
  * written and read via the existing document tools.
  */
 
-import { findContact, findOwnerContact, upsertContact } from "@/db/contacts";
+import {
+  allContacts,
+  findContact,
+  findOwnerContact,
+  searchContacts as searchContactsDB,
+  upsertContact,
+} from "@/db/contacts";
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
 import type { OriginExecutionContext } from "../context";
+
+// –
+// List
+// –
+
+const contactRow = z.object({
+  email: z.string().nullable(),
+  name: z.string().nullable(),
+  relationship: z.string(),
+});
+
+const listOutput = z.array(contactRow);
+
+type ListOutput = z.infer<typeof listOutput>;
+
+/** Return every contact for the current principal. */
+export const listContacts: Capability<OriginExecutionContext, Record<string, never>, ListOutput> = {
+  async call(ectx) {
+    return allContacts(ectx.principal.id);
+  },
+
+  description:
+    "List all known contacts — names, emails, and relationships (owner/contact).",
+  name: "list_contacts",
+
+  inputSchema: z.object({}),
+  outputSchema: listOutput,
+};
+
+// –
+// Search
+// –
+
+const searchInput = z.object({
+  /** Substring to match against name or email. */
+  query: z.string().min(1),
+});
+
+const searchOutput = z.array(contactRow);
+
+type SearchInput = z.infer<typeof searchInput>;
+type SearchOutput = z.infer<typeof searchOutput>;
+
+/** Search contacts by name or email (case-insensitive substring match). */
+export const searchContacts: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
+  async call(ectx, input) {
+    return searchContactsDB(ectx.principal.id, input.query);
+  },
+
+  description:
+    "Search contacts by name or email. Returns matching contacts.",
+  name: "search_contacts",
+
+  inputSchema: searchInput,
+  outputSchema: searchOutput,
+};
 
 // –
 // Lookup

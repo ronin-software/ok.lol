@@ -52,22 +52,22 @@ export default function ActivityTable({ rows }: { rows: ActivityEntry[] }) {
         {rows.map((row, i) => (
           <li
             key={i}
-            className="flex items-baseline justify-between gap-4 py-2 border-b border-zinc-800/50 text-sm"
+            className="overflow-hidden border-b border-zinc-800/50 py-2"
           >
-            <div className="min-w-0 flex-1">
-              <span className="font-mono text-xs text-zinc-300">
+            <div className="flex items-center justify-between gap-4">
+              <span className="shrink-0 font-mono text-xs text-zinc-300">
                 {row.kind === "log" ? row.capability : row.resource}
               </span>
-              <span className="ml-2 text-zinc-500 truncate">
-                {row.kind === "log" ? summarize(row.input) : row.detail}
-              </span>
+              <div className="flex shrink-0 items-center gap-3 text-xs text-zinc-500">
+                {row.kind === "usage" && (
+                  <span className="tabular-nums">${row.cost.toFixed(4)}</span>
+                )}
+                <time dateTime={row.createdAt}>{formatTime(row.createdAt)}</time>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3 text-xs text-zinc-500">
-              {row.kind === "usage" && (
-                <span className="tabular-nums">${row.cost.toFixed(4)}</span>
-              )}
-              <time dateTime={row.createdAt}>{formatTime(row.createdAt)}</time>
-            </div>
+            <p className="mt-0.5 truncate text-xs text-zinc-500">
+              {row.kind === "log" ? summarize(row.input) : row.detail}
+            </p>
           </li>
         ))}
       </ul>

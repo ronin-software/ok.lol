@@ -6,13 +6,46 @@
  * from interactions. Notes live in documents at `contacts/{email}`.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ilike, or } from "drizzle-orm";
 import { db } from ".";
 import { contact } from "./schema";
 
 // –
 // Reads
 // –
+
+/** All contacts for a principal. */
+export async function allContacts(principalId: string) {
+  return db
+    .select({
+      email: contact.email,
+      name: contact.name,
+      relationship: contact.relationship,
+    })
+    .from(contact)
+    .where(eq(contact.principalId, principalId));
+}
+
+/** Search contacts by name or email substring (case-insensitive). */
+export async function searchContacts(principalId: string, query: string) {
+  const pattern = `%${query}%`;
+  return db
+    .select({
+      email: contact.email,
+      name: contact.name,
+      relationship: contact.relationship,
+    })
+    .from(contact)
+    .where(
+      and(
+        eq(contact.principalId, principalId),
+        or(
+          ilike(contact.name, pattern),
+          ilike(contact.email, pattern),
+        ),
+      ),
+    );
+}
 
 /** The account holder's contact. Every principal has exactly one. */
 export async function findOwnerContact(principalId: string) {

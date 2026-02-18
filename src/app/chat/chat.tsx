@@ -8,7 +8,6 @@ import {
   isToolUIPart,
   type ToolUIPart,
 } from "ai";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Thread = {
@@ -27,9 +26,18 @@ type StoredMessage = {
   role: string;
 };
 
-export default function Chat() {
-  const [threadId, setThreadId] = useState<string | null>(null);
-  const [threads, setThreads] = useState<Thread[]>([]);
+type Props = {
+  /** Pre-hydrated messages for the latest thread (server-loaded). */
+  initialMessages?: StoredMessage[];
+  /** ID of the thread to show on first render (server-loaded). */
+  initialThreadId?: string;
+  /** Thread list to show on first render (server-loaded). */
+  initialThreads?: Thread[];
+};
+
+export default function Chat({ initialMessages = [], initialThreadId, initialThreads = [] }: Props) {
+  const [threadId, setThreadId] = useState<string | null>(initialThreadId ?? null);
+  const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // True once we know the viewport is wide (≥768px); starts false for SSR safety.
   const [wide, setWide] = useState(false);
@@ -37,7 +45,7 @@ export default function Chat() {
 
   // Auto-open sidebar on wide viewports; close drawer when it becomes narrow.
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
+    const mq = window.matchMedia("(min-width: 1024px)");
     setWide(mq.matches);
     const onChange = (e: MediaQueryListEvent) => setWide(e.matches);
     mq.addEventListener("change", onChange);
@@ -58,7 +66,10 @@ export default function Chat() {
     }),
   );
 
-  const { error, messages, sendMessage, setMessages, status } = useChat({ transport });
+  const { error, messages, sendMessage, setMessages, status } = useChat({
+    messages: initialThreadId ? hydrate(initialMessages) as UIMessage[] : undefined,
+    transport,
+  });
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,12 +85,12 @@ export default function Chat() {
     inputRef.current?.focus();
   }, []);
 
-  // Load thread list and auto-resume the latest on mount.
+  // Load thread list and auto-resume the latest on mount — only when the
+  // server didn't pre-populate data (e.g. new user with no threads yet).
   useEffect(() => {
+    if (initialThreadId) return;
     loadThreads().then((list) => {
-      if (list.length > 0) {
-        loadThread(list[0]!.id);
-      }
+      if (list.length > 0) loadThread(list[0]!.id);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -141,7 +152,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="relative flex h-dvh overflow-hidden bg-background">
+    <div className="relative flex h-full overflow-hidden bg-background">
       {/* Scrim — taps outside to close drawer on narrow viewports */}
       {!wide && drawerOpen && (
         <div
@@ -156,7 +167,7 @@ export default function Chat() {
           "flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950",
           wide ? "" : "absolute inset-y-0 left-0 z-20",
         ].join(" ")}>
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-3">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
             <span className="text-xs font-medium text-zinc-400">Threads</span>
             <button
               type="button"
@@ -210,12 +221,7 @@ export default function Chat() {
                 {drawerOpen ? "Close" : "Threads"}
               </button>
             )}
-            <Link
-              href="/dashboard"
-              className="text-xs text-zinc-500 transition-colors hover:text-white"
-            >
-              Dashboard
-            </Link>
+            <span className="text-xs font-medium text-zinc-400">Chat</span>
           </div>
           <h1 className="min-w-0 flex-1 truncate px-4 text-center text-sm font-medium">
             {threads.find((t) => t.id === threadId)?.title || "Chat"}
@@ -245,7 +251,7 @@ export default function Chat() {
         </div>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-zinc-800 bg-background">
+        <div className="shrink-0">
           <div className="mx-auto flex w-full max-w-2xl items-end gap-2 px-4 py-3">
             <textarea
               ref={inputRef}
@@ -255,10 +261,8 @@ export default function Chat() {
               placeholder="Message your pal..."
               rows={1}
               className={[
-                "flex-1 resize-none rounded-xl border border-zinc-800",
-                "bg-zinc-900 px-4 py-3 text-sm text-white",
+                "flex-1 resize-none bg-transparent px-1 py-2 text-sm text-white",
                 "placeholder-zinc-600 outline-none",
-                "focus:border-zinc-600 transition-colors",
                 "max-h-32 overflow-y-auto",
               ].join(" ")}
               style={{ fieldSizing: "content" } as React.CSSProperties}
@@ -268,7 +272,7 @@ export default function Chat() {
               onClick={send}
               disabled={streaming || input.trim().length === 0}
               className={[
-                "shrink-0 rounded-xl bg-white px-4 py-3",
+                "shrink-0 rounded-lg bg-white px-3 py-1.5",
                 "text-sm font-medium text-black transition-colors",
                 "hover:bg-zinc-200 disabled:opacity-40",
               ].join(" ")}
@@ -357,16 +361,20 @@ function MessageBubble({ message }: { message: UIMessage }) {
 // –
 
 const toolLabels: Record<string, { active: string; done: string }> = {
-  expand:          { active: "Expanding summary",   done: "Expanded summary" },
-  http_get:        { active: "Fetching URL",        done: "Fetched URL" },
-  list_documents:  { active: "Listing documents",   done: "Listed documents" },
-  list_threads:    { active: "Listing threads",     done: "Listed threads" },
-  lookup_owner:    { active: "Looking up owner",    done: "Looked up owner" },
-  read_document:   { active: "Reading document",    done: "Read document" },
-  read_thread:     { active: "Reading thread",      done: "Read thread" },
-  search_threads:  { active: "Searching threads",   done: "Searched threads" },
-  send_email:      { active: "Sending email",       done: "Sent email" },
-  write_document:  { active: "Writing document",    done: "Wrote document" },
+  expand:           { active: "Expanding summary",   done: "Expanded summary" },
+  http_get:         { active: "Fetching URL",        done: "Fetched URL" },
+  list_contacts:    { active: "Listing contacts",    done: "Listed contacts" },
+  list_documents:   { active: "Listing documents",   done: "Listed documents" },
+  list_threads:     { active: "Listing threads",     done: "Listed threads" },
+  lookup_contact:   { active: "Looking up contact",  done: "Looked up contact" },
+  lookup_owner:     { active: "Looking up owner",    done: "Looked up owner" },
+  read_document:    { active: "Reading document",    done: "Read document" },
+  read_thread:      { active: "Reading thread",      done: "Read thread" },
+  record_contact:   { active: "Recording contact",   done: "Recorded contact" },
+  search_contacts:  { active: "Searching contacts",  done: "Searched contacts" },
+  search_threads:   { active: "Searching threads",   done: "Searched threads" },
+  send_email:       { active: "Sending email",       done: "Sent email" },
+  write_document:   { active: "Writing document",    done: "Wrote document" },
 };
 
 function ToolChip({ part }: { part: ToolPart }) {

@@ -10,7 +10,13 @@
 import { assert } from "@/lib/assert";
 import { toTool, type Capability } from "@ok.lol/capability";
 import type { Tool } from "ai";
-import { lookupContact, lookupOwner, recordContact } from "../contacts";
+import {
+  listContacts,
+  lookupContact,
+  lookupOwner,
+  recordContact,
+  searchContacts,
+} from "../contacts";
 import type { OriginExecutionContext } from "../context";
 import { listDocuments, readDocument, writeDocument } from "../documents";
 import emailSend from "../email/email.send";
@@ -31,6 +37,7 @@ const ORIGIN_CAPABILITIES = [
   expandSummary,
   followUp,
   httpGet,
+  listContacts,
   listDocuments,
   listThreads,
   lookupContact,
@@ -38,6 +45,7 @@ const ORIGIN_CAPABILITIES = [
   readDocument,
   readThread,
   recordContact,
+  searchContacts,
   searchThreads,
   writeDocument,
 ];

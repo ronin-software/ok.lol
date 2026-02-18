@@ -5,10 +5,10 @@
  * filter by principalId to enforce ownership at the data layer.
  */
 
+import { assert } from "@/lib/assert";
 import { and, asc, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { db } from ".";
 import { message, thread } from "./schema";
-import { assert } from "@/lib/assert";
 
 // –
 // Token estimation
@@ -240,6 +240,52 @@ export async function threadMessages(threadId: string) {
       sql`${message.role} != 'summary'`,
     ))
     .orderBy(asc(message.createdAt));
+}
+
+/**
+ * Email threads involving a contact, identified by their email address.
+ * Matches the email anywhere in message metadata (from, to, cc).
+ */
+export async function threadsForContact(principalId: string, email: string) {
+  const pattern = `%${email}%`;
+
+  // Subquery: snippet per thread (latest non-summary message).
+  const latest = db
+    .select({
+      content: message.content,
+      createdAt: message.createdAt,
+      threadId: message.threadId,
+      rn: sql<number>`row_number() over (partition by ${message.threadId} order by ${message.createdAt} desc)`.as("rn"),
+    })
+    .from(message)
+    .where(sql`${message.role} != 'summary'`)
+    .as("latest");
+
+  // Subquery: distinct thread IDs with at least one message mentioning the email.
+  // No channel filter — outbound emails sent from chat threads should also appear.
+  const matching = db
+    .selectDistinct({ threadId: message.threadId })
+    .from(message)
+    .innerJoin(thread, eq(message.threadId, thread.id))
+    .where(and(
+      eq(thread.principalId, principalId),
+      ilike(sql`${message.metadata}::text`, pattern),
+    ))
+    .as("matching");
+
+  return db
+    .select({
+      channel: thread.channel,
+      createdAt: thread.createdAt,
+      id: thread.id,
+      snippet: latest.content,
+      snippetAt: latest.createdAt,
+      title: thread.title,
+    })
+    .from(thread)
+    .innerJoin(matching, eq(matching.threadId, thread.id))
+    .leftJoin(latest, and(eq(latest.threadId, thread.id), eq(latest.rn, 1)))
+    .orderBy(desc(sql`coalesce(${latest.createdAt}, ${thread.createdAt})`));
 }
 
 /** Find an email thread by Resend message-id references or normalized subject. */

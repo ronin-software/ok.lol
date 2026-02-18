@@ -1,5 +1,6 @@
-import { insertMessage } from "@/db/threads";
+import { createThread, findEmailThread, insertMessage } from "@/db/threads";
 import { env } from "@/lib/env";
+import { normalizeSubject } from "@/lib/email";
 import type { Capability } from "@ok.lol/capability";
 import { Resend, type CreateEmailOptions } from "resend";
 import { z } from "zod";
@@ -40,20 +41,26 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
     // Cast needed: Omit over a discriminated union loses branch structure.
     const { data } = await resend.emails.send({ ...sendPayload, from } as CreateEmailOptions);
 
-    // Persist the outbound email in the thread.
-    if (threadId) {
-      await insertMessage({
-        content: email.text,
-        metadata: {
-          cc: email.cc,
-          from,
-          messageId: data?.id,
-          subject: email.subject,
-          to: email.to,
-        },
-        role: "assistant",
-        threadId,
-      });
+    const meta = {
+      cc: email.cc,
+      from,
+      messageId: data?.id,
+      subject: email.subject,
+      to: email.to,
+    };
+
+    // Always persist in an email thread so the reply lands in the same thread
+    // and the full conversation is visible from the contact page.
+    const normalized = normalizeSubject(email.subject);
+    let emailThreadId = await findEmailThread(ectx.principal.id, [], normalized);
+    if (!emailThreadId) {
+      emailThreadId = await createThread(ectx.principal.id, "email", normalized);
+    }
+    await insertMessage({ content: email.text, metadata: meta, role: "assistant", threadId: emailThreadId });
+
+    // Also persist in the originating chat thread for context.
+    if (threadId && threadId !== emailThreadId) {
+      await insertMessage({ content: email.text, metadata: meta, role: "assistant", threadId });
     }
   },
 

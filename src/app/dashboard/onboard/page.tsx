@@ -1,12 +1,14 @@
 import { db } from "@/db";
 import { principal } from "@/db/schema";
+import { env } from "@/lib/env";
 import { verify } from "@/lib/session";
 import { eq } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import Wizard from "./wizard";
 
-/** Landing redirect: chat if pal exists, onboard if not. After funding, settings. */
-export default async function DashboardPage() {
+/** Pal creation wizard. Redirects away if a pal already exists. */
+export default async function OnboardPage() {
   const accountId = await verify();
   if (!accountId) redirect("/sign-in");
 
@@ -16,9 +18,11 @@ export default async function DashboardPage() {
     .where(eq(principal.accountId, accountId))
     .limit(1);
 
-  if (!pal) redirect("/dashboard/onboard");
+  if (pal) redirect("/dashboard/chat");
 
-  // After Stripe checkout, show the updated balance.
-  const jar = await cookies();
-  redirect(jar.has("funded") ? "/dashboard/settings" : "/dashboard/chat");
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+      <Wizard domain={env.EMAIL_DOMAIN} />
+    </Suspense>
+  );
 }

@@ -66,8 +66,18 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     username: ectx.principal.username,
   });
 
+  // Strip stored tool-call parts before converting — the model doesn't need
+  // prior tool invocations in its context, only the text they produced.
   const messageInput = input.messages
-    ? { messages: await convertToModelMessages(input.messages) }
+    ? {
+        messages: await convertToModelMessages(
+          input.messages.map((m) =>
+            m.role === "assistant"
+              ? { ...m, parts: m.parts.filter((p) => p.type !== "dynamic-tool") }
+              : m,
+          ),
+        ),
+      }
     : { prompt: input.prompt! };
 
   return streamText({
