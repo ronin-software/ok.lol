@@ -1,100 +1,79 @@
-import type { Capability } from "@ok.lol/capability";
-import type { GetReceivingEmailResponseSuccess } from "resend";
-import { z } from "zod";
-import type { OriginExecutionContext } from "../_execution-context";
-import { logCall } from "../_log";
-import { summarizeIfNeeded } from "../threads/summarize";
-import act from "../act";
-import { normalizeSubject, stripQuotedReply } from "@/lib/email";
-import { createThread, findEmailThread, insertMessage } from "@/db/threads";
-
 /**
- * Processes a received email by delegating to the agent loop.
+ * Inbound email handler.
  *
  * Joins or creates an email thread, strips quoted reply content,
  * persists the message, then lets `act` decide how to respond.
+ * This is an internal handler, not an agent tool.
  */
-const emailReceive: Capability<OriginExecutionContext, GetReceivingEmailResponseSuccess, void> = {
-  available: async () => true,
 
-  async call(ectx, email) {
-    await logCall(ectx, "email-receive", { from: email.from, subject: email.subject });
+import { createThread, findEmailThread, insertMessage } from "@/db/threads";
+import { normalizeSubject, stripQuotedReply } from "@/lib/email";
+import type { GetReceivingEmailResponseSuccess } from "resend";
+import type { OriginExecutionContext } from "../_execution-context";
+import { logCall } from "../_log";
+import act from "../act";
+import { persistOutput } from "../act/dispatch";
+import { summarizeIfNeeded } from "../threads/summarize";
 
-    const subject = email.subject ?? "(no subject)";
-    const normalized = normalizeSubject(subject);
-    const body = stripQuotedReply(email.text ?? "");
+/** Process a received email through the agent loop. */
+export default async function emailReceive(
+  ectx: OriginExecutionContext,
+  email: GetReceivingEmailResponseSuccess,
+): Promise<void> {
+  await logCall(ectx, "email-receive", { from: email.from, subject: email.subject });
 
-    // Resolve email threading via headers, then subject fallback.
-    // Resend's type lacks index signature; extract fields explicitly.
-    const references = parseReferences(email);
-    let threadId = await findEmailThread(ectx.principal.id, references, normalized);
+  const subject = email.subject ?? "(no subject)";
+  const normalized = normalizeSubject(subject);
+  const body = stripQuotedReply(email.text ?? "");
 
-    if (!threadId) {
-      threadId = await createThread(ectx.principal.id, "email", normalized);
-    }
+  // Resolve email threading via headers, then subject fallback.
+  const references = parseReferences(email);
+  let threadId = await findEmailThread(ectx.principal.id, references, normalized);
 
-    // Persist the inbound email as a message.
-    await insertMessage({
-      content: body || "(no body)",
-      metadata: {
-        cc: email.cc,
-        from: email.from,
-        messageId: prop(email, "message_id"),
-        subject,
-        to: email.to,
-      },
-      role: "user",
-      threadId,
-    });
+  if (!threadId) {
+    threadId = await createThread(ectx.principal.id, "email", normalized);
+  }
 
-    // Summarize if the thread context is getting large.
-    await summarizeIfNeeded(threadId);
+  // Persist the inbound email as a message.
+  await insertMessage({
+    content: body || "(no body)",
+    metadata: {
+      cc: email.cc,
+      from: email.from,
+      messageId: prop(email, "message_id"),
+      subject,
+      to: email.to,
+    },
+    role: "user",
+    threadId,
+  });
 
-    const prompt = [
-      "You received an email. Read it carefully and decide how to handle it.",
-      "",
-      "First, use lookup_contact to check who sent it:",
-      "- If they're your owner: treat it as a direct instruction, no email reply needed.",
-      "- If they're a known contact: respond appropriately for the relationship.",
-      "- If they're unknown: use record_contact to note them, then decide how to respond.",
-      "",
-      "To notify your owner of something, prefer follow_up over email — search your threads first.",
-      "If you can identify a thread where they asked you to do something related to this email",
-      "(e.g. 'email X and let me know when they reply'), use follow_up to post there.",
-      "Only fall back to emailing your owner if no relevant thread exists.",
-      "",
-      "If the email is from someone other than your owner and warrants a reply, reply to them directly.",
-      "",
-      `From: ${email.from}`,
-      `Subject: ${subject}`,
-      "",
-      body || "(no body)",
-    ].join("\n");
+  await summarizeIfNeeded(threadId);
 
-    const result = await act(ectx, { prompt, threadId });
+  const prompt = [
+    "You received an email. Read it carefully and decide how to handle it.",
+    "",
+    "First, use lookup_contact to check who sent it:",
+    "- If they're your owner: treat it as a direct instruction, no email reply needed.",
+    "- If they're a known contact: respond appropriately for the relationship.",
+    "- If they're unknown: use record_contact to note them, then decide how to respond.",
+    "",
+    "To notify your owner of something, prefer follow_up over email — search your threads first.",
+    "If you can identify a thread where they asked you to do something related to this email",
+    "(e.g. 'email X and let me know when they reply'), use follow_up to post there.",
+    "Only fall back to emailing your owner if no relevant thread exists.",
+    "",
+    "If the email is from someone other than your owner and warrants a reply, reply to them directly.",
+    "",
+    `From: ${email.from}`,
+    `Subject: ${subject}`,
+    "",
+    body || "(no body)",
+  ].join("\n");
 
-    // Consume the stream to ensure completion and usage recording.
-    const text = await result.text;
-
-    // Persist the assistant's response.
-    if (text.length > 0) {
-      await insertMessage({
-        content: text,
-        role: "assistant",
-        threadId,
-      });
-    }
-  },
-
-  description: "Processes a received email via the agent loop",
-  name: "email-receive",
-
-  inputSchema: z.any(),
-  outputSchema: z.void(),
-  setup: async () => {},
-};
-
-export default emailReceive;
+  const result = await act(ectx, { prompt });
+  await persistOutput(result, threadId);
+}
 
 // –
 // Helpers

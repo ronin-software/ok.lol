@@ -1,16 +1,17 @@
 /**
  * Tool registry for the `act` agent loop.
  *
- * Each origin capability that should be exposed as a tool is registered
- * here. `toTool` from `@ok.lol/capability` derives AI SDK tools from
- * capabilities.
+ * Auto-derives AI SDK tools from the capabilities array via `toTool`,
+ * wrapping each with automatic logging.
  */
 
-import { toTool } from "@ok.lol/capability";
 import { assert } from "@/lib/assert";
+import { toTool, type Capability } from "@ok.lol/capability";
+import type { Tool } from "ai";
+import type { OriginExecutionContext } from "../_execution-context";
+import { logCall } from "../_log";
 import { lookupContact, recordContact } from "../contacts";
 import { listDocuments, readDocument, writeDocument } from "../documents";
-import type { OriginExecutionContext } from "../_execution-context";
 import emailSend from "../email/email.send";
 import {
   expandSummary,
@@ -35,25 +36,36 @@ const capabilities = [
   writeDocument,
 ];
 
+/** Wrap a tool's execute with automatic logging. */
+function withLogging(
+  name: string,
+  baseTool: Tool<unknown, unknown>,
+  ectx: OriginExecutionContext,
+): Tool<unknown, unknown> {
+  const original = baseTool.execute!;
+  return {
+    ...baseTool,
+    execute: async (input: unknown, opts: unknown) => {
+      logCall(ectx, name, input).catch(() => {});
+      return original(input, opts as Parameters<typeof original>[1]);
+    },
+  } as Tool<unknown, unknown>;
+}
+
 /** Build AI SDK tools and a capabilities listing from origin capabilities. */
 export function makeTools(ectx: OriginExecutionContext) {
   assert(ectx.principal.username, "principal must have a username");
   assert(ectx.principal.id, "principal must have an id");
 
+  type AnyOriginCap = Capability<OriginExecutionContext, unknown, unknown>;
+
   return {
     capabilities,
-    tools: {
-      [emailSend.name]: toTool(emailSend, ectx),
-      [expandSummary.name]: toTool(expandSummary, ectx),
-      [followUp.name]: toTool(followUp, ectx),
-      [listDocuments.name]: toTool(listDocuments, ectx),
-      [listThreads.name]: toTool(listThreads, ectx),
-      [lookupContact.name]: toTool(lookupContact, ectx),
-      [readDocument.name]: toTool(readDocument, ectx),
-      [readThread.name]: toTool(readThread, ectx),
-      [recordContact.name]: toTool(recordContact, ectx),
-      [searchThreads.name]: toTool(searchThreads, ectx),
-      [writeDocument.name]: toTool(writeDocument, ectx),
-    },
+    tools: Object.fromEntries(
+      capabilities.map((c) => {
+        const baseTool = toTool(c as AnyOriginCap, ectx);
+        return [c.name, withLogging(c.name, baseTool, ectx)];
+      }),
+    ),
   };
 }

@@ -45,7 +45,6 @@ type ListInput = z.infer<typeof listInput>;
 type ListOutput = z.infer<typeof listOutput>;
 
 export const listThreads: Capability<OriginExecutionContext, ListInput, ListOutput> = {
-  available: async () => true,
   async call(ectx, input) {
     const rows = await recentThreads(ectx.principal.id, {
       channel: input.channel,
@@ -62,7 +61,6 @@ export const listThreads: Capability<OriginExecutionContext, ListInput, ListOutp
       })),
     };
   },
-  setup: async () => {},
 
   description: "List recent conversation threads with latest snippet",
   name: "list_threads",
@@ -94,7 +92,6 @@ type SearchInput = z.infer<typeof searchInput>;
 type SearchOutput = z.infer<typeof searchOutput>;
 
 export const searchThreads: Capability<OriginExecutionContext, SearchInput, SearchOutput> = {
-  available: async () => true,
   async call(ectx, input) {
     assert(input.query.length > 0, "query must be non-empty");
 
@@ -114,7 +111,6 @@ export const searchThreads: Capability<OriginExecutionContext, SearchInput, Sear
       })),
     };
   },
-  setup: async () => {},
 
   description: "Search message content across all your threads",
   name: "search_threads",
@@ -145,7 +141,6 @@ type ReadInput = z.infer<typeof readInput>;
 type ReadOutput = z.infer<typeof readOutput>;
 
 export const readThread: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
-  available: async () => true,
   async call(_ectx, input) {
     const rows = await activeContext(input.threadId);
 
@@ -159,7 +154,6 @@ export const readThread: Capability<OriginExecutionContext, ReadInput, ReadOutpu
       })),
     };
   },
-  setup: async () => {},
 
   description: "Read the active context of a thread (summaries + unsummarized messages)",
   name: "read_thread",
@@ -190,7 +184,6 @@ type ExpandInput = z.infer<typeof expandInput>;
 type ExpandOutput = z.infer<typeof expandOutput>;
 
 export const expandSummary: Capability<OriginExecutionContext, ExpandInput, ExpandOutput> = {
-  available: async () => true,
   async call(_ectx, input) {
     const rows = input.recursive
       ? await expandTree(input.summaryId)
@@ -205,7 +198,6 @@ export const expandSummary: Capability<OriginExecutionContext, ExpandInput, Expa
       })),
     };
   },
-  setup: async () => {},
 
   description: "Expand a summary into its children (or recursively to leaf messages)",
   name: "expand",
@@ -227,7 +219,6 @@ type FollowUpInput = z.infer<typeof followUpInput>;
 
 /** Post a message in a thread you're not currently acting in. */
 export const followUp: Capability<OriginExecutionContext, FollowUpInput, void> = {
-  available: async () => true,
   async call(ectx, input) {
     const meta = await getThreadMeta(input.threadId, ectx.principal.id);
     assert(meta != null, `Thread not found or not owned: ${input.threadId}`);
@@ -252,7 +243,6 @@ export const followUp: Capability<OriginExecutionContext, FollowUpInput, void> =
       });
     }
   },
-  setup: async () => {},
 
   description:
     "Post a message in another thread. Use when a thread is waiting " +

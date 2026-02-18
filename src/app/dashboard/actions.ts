@@ -3,13 +3,12 @@
 import { db } from "@/db";
 import { document, principal, worker } from "@/db/schema";
 import { verify } from "@/lib/session";
+import { probe } from "@/lib/tunnel";
 import { and, eq } from "drizzle-orm";
 
 /**
  * Save a document for the current user's pal.
  * Inserts a new version (append-only) with `editedBy: "user"`.
- *
- * Returns `{ ok: true }` on success, `{ error: string }` on failure.
  */
 export async function saveDocument(
   principalId: string,
@@ -20,7 +19,6 @@ export async function saveDocument(
   const accountId = await verify();
   if (!accountId) return { error: "Unauthorized" };
 
-  // Verify the principal belongs to this account.
   const pal = await db
     .select({ accountId: principal.accountId })
     .from(principal)
@@ -92,9 +90,6 @@ export async function deleteWorker(
 // Probing
 // –
 
-const TUNNEL_KEY = process.env.TUNNEL_KEY ?? "";
-const PROBE_TIMEOUT_MS = 3_000;
-
 /**
  * Probe all workers for the current account, updating reported hostnames.
  * Returns a map of worker ID → name for any that responded.
@@ -112,28 +107,14 @@ export async function probeWorkers(): Promise<Record<string, string>> {
 
   await Promise.all(
     rows.map(async (row) => {
-      try {
-        const headers: Record<string, string> = {};
-        if (TUNNEL_KEY) headers["X-Tunnel-Key"] = TUNNEL_KEY;
+      const body = await probe(row.url);
+      if (!body || typeof body.name !== "string") return;
 
-        const res = await fetch(row.url, {
-          headers,
-          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-        });
-        if (!res.ok) return;
-
-        const body = (await res.json()) as { name?: unknown };
-        const name = typeof body.name === "string" ? body.name : null;
-        if (!name) return;
-
-        names[row.id] = name;
-        await db
-          .update(worker)
-          .set({ name })
-          .where(and(eq(worker.id, row.id), eq(worker.accountId, accountId)));
-      } catch {
-        // Offline — skip.
-      }
+      names[row.id] = body.name;
+      await db
+        .update(worker)
+        .set({ name: body.name })
+        .where(and(eq(worker.id, row.id), eq(worker.accountId, accountId)));
     }),
   );
 
@@ -153,27 +134,13 @@ export async function probeWorker(
     .where(and(eq(worker.id, id), eq(worker.accountId, accountId)));
   if (!row) return { name: null };
 
-  try {
-    const headers: Record<string, string> = {};
-    if (TUNNEL_KEY) headers["X-Tunnel-Key"] = TUNNEL_KEY;
+  const body = await probe(row.url);
+  if (!body || typeof body.name !== "string") return { name: null };
 
-    const res = await fetch(row.url, {
-      headers,
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
-    if (!res.ok) return { name: null };
+  await db
+    .update(worker)
+    .set({ name: body.name })
+    .where(and(eq(worker.id, id), eq(worker.accountId, accountId)));
 
-    const body = (await res.json()) as { name?: unknown };
-    const name = typeof body.name === "string" ? body.name : null;
-    if (!name) return { name: null };
-
-    await db
-      .update(worker)
-      .set({ name })
-      .where(and(eq(worker.id, id), eq(worker.accountId, accountId)));
-
-    return { name };
-  } catch {
-    return { name: null };
-  }
+  return { name: body.name };
 }

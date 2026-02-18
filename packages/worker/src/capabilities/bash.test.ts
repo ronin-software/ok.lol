@@ -4,11 +4,11 @@ import { bash } from "./bash";
 
 describe("bash", () => {
   test("is available", async () => {
-    expect(await bash.available()).toBe(true);
+    expect(await bash.available?.()).toBe(true);
   });
 
   test("setup is a no-op", async () => {
-    await bash.setup();
+    await bash.setup?.();
   });
 
   test("runs a command", async () => {

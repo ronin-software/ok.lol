@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
 import { hire, listing, principal } from "@/db/schema";
+import { assert } from "@/lib/assert";
 import { secret } from "@/lib/session";
 import { available, lookupAccount } from "@/lib/tigerbeetle";
 import { eq } from "drizzle-orm";
@@ -62,80 +63,91 @@ export type OriginExecutionContext = {
 // Resolution
 // –
 
-/** JWT payload shape for origin execution */
+/** JWT payload shape for origin execution. */
 type Claims = {
-  /** Principal ID (executor) */
-  sub: string;
-  /** Hire ID, present when executing a listing on behalf of a caller */
+  /** Hire ID, present when executing a listing on behalf of a caller. */
   hireId?: string;
+  /** Principal ID (executor). */
+  sub: string;
 };
 
-/**
- * Resolves the full OriginExecutionContext from a JWT.
- *
- * 1. Verify JWT, extract sub (principal ID) and optional hireId
- * 2. Look up principal + account from DB
- * 3. Look up principal's documents
- * 4. Look up available credits from TigerBeetle
- * 5. If hireId: resolve caller from hire record, inject listing skill
- */
-export async function getExecutionContext(jwt: string): Promise<OriginExecutionContext> {
-  // Verify and extract claims
-  const { payload } = await jwtVerify(jwt, secret());
-  const claims = payload as unknown as Claims;
-  if (!claims.sub) throw new Error("JWT missing sub claim");
+/** How the caller was identified. */
+type Source =
+  | { accountId: string }
+  | { jwt: string };
 
-  // Resolve principal
-  const [row] = await db
-    .select()
-    .from(principal)
-    .where(eq(principal.id, claims.sub))
-    .limit(1);
-  if (!row) throw new Error(`Principal not found: ${claims.sub}`);
+/**
+ * Resolve an OriginExecutionContext from either a JWT or a session accountId.
+ *
+ * - `{ jwt }`: verifies the token, extracts principalId + optional hireId.
+ * - `{ accountId }`: looks up the principal by owning account.
+ *
+ * Both paths resolve the principal's documents and credit balance.
+ * The JWT path additionally supports hire-based execution (caller + skill injection).
+ */
+export async function getExecutionContext(source: Source): Promise<OriginExecutionContext> {
+  let principalId: string | undefined;
+  let accountId: string | undefined;
+  let hireId: string | undefined;
+
+  if ("jwt" in source) {
+    const { payload } = await jwtVerify(source.jwt, secret());
+    const claims = payload as unknown as Claims;
+    assert(claims.sub, "JWT missing sub claim");
+    principalId = claims.sub;
+    hireId = claims.hireId;
+  } else {
+    accountId = source.accountId;
+  }
+
+  // Resolve principal by ID or by owning account.
+  const [row] = principalId
+    ? await db.select().from(principal).where(eq(principal.id, principalId)).limit(1)
+    : await db.select().from(principal).where(eq(principal.accountId, accountId!)).limit(1);
+  assert(row, principalId ? `Principal not found: ${principalId}` : `No principal for account: ${accountId}`);
 
   // Resolve documents and credits in parallel.
-  const [contextDocs, tbAccount] = await Promise.all([
+  const [docs, tbAccount] = await Promise.all([
     currentDocuments(row.id),
     lookupAccount(BigInt(row.accountId)),
   ]);
   const credits = tbAccount ? available(tbAccount) : 0n;
 
-  // Resolve caller if this is a hire execution
+  // Resolve caller if this is a hire execution.
   let caller: OriginExecutionContext["caller"];
-  if (claims.hireId) {
+  if (hireId) {
     const [hireRow] = await db
       .select()
       .from(hire)
-      .where(eq(hire.id, claims.hireId))
+      .where(eq(hire.id, hireId))
       .limit(1);
-    if (!hireRow) throw new Error(`Hire not found: ${claims.hireId}`);
+    assert(hireRow, `Hire not found: ${hireId}`);
 
-    // Resolve caller principal
     const [callerRow] = await db
       .select()
       .from(principal)
       .where(eq(principal.id, hireRow.callerId))
       .limit(1);
-    if (!callerRow) throw new Error(`Caller principal not found: ${hireRow.callerId}`);
+    assert(callerRow, `Caller principal not found: ${hireRow.callerId}`);
 
     caller = {
       accountId: callerRow.accountId,
-      hireId: claims.hireId,
+      hireId,
       name: callerRow.name,
       username: callerRow.username,
     };
 
-    // Inject listing skill into documents
+    // Inject listing skill into documents.
     const [listingRow] = await db
       .select()
       .from(listing)
       .where(eq(listing.id, hireRow.listingId))
       .limit(1);
     if (listingRow?.skill) {
-      contextDocs.push({
+      docs.push({
         contents: listingRow.skill,
         path: "skill",
-        priority: 100, // Skills inject after core documents.
+        priority: 100,
         updatedAt: listingRow.updatedAt.toISOString(),
         updatedBy: "user",
       });
@@ -147,7 +159,7 @@ export async function getExecutionContext(jwt: string): Promise<OriginExecutionC
     principal: {
       accountId: row.accountId,
       credits,
-      documents: contextDocs,
+      documents: docs,
       id: row.id,
       name: row.name,
       username: row.username,

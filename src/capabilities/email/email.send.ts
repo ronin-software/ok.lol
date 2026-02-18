@@ -4,7 +4,6 @@ import type { Capability } from "@ok.lol/capability";
 import { Resend, type CreateEmailOptions } from "resend";
 import { z } from "zod";
 import type { OriginExecutionContext } from "../_execution-context";
-import { logCall } from "../_log";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -32,9 +31,7 @@ const outputSchema = z.void();
 
 /** Sends an email from the principal's address and persists it in the thread. */
 const emailSend: Capability<OriginExecutionContext, Input, void> = {
-  available: async () => true,
   async call(ectx, email) {
-    await logCall(ectx, "email-send", email);
     const from = `${ectx.principal.name} <${ectx.principal.username}@${env.EMAIL_DOMAIN}>`;
 
     // Strip threadId before passing to Resend (not a Resend field).
@@ -59,7 +56,6 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
       });
     }
   },
-  setup: async () => {},
 
   description: `Sends an email from the principal's @${env.EMAIL_DOMAIN} address`,
   name: "send_email",

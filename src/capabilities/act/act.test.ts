@@ -2,11 +2,11 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateText, stepCountIs, tool } from "ai";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { CORE_PATHS, withDefaults } from "../documents/defaults";
-import { listDocuments, readDocument, writeDocument } from "../documents";
 import type { Document } from "../_execution-context";
-import { assemblePrompt, type PromptOptions } from "./prompt";
+import { listDocuments, readDocument, writeDocument } from "../documents";
+import { CORE_PATHS, withDefaults } from "../documents/defaults";
 import emailSend from "../email/email.send";
+import { assemblePrompt, type PromptOptions } from "./prompt";
 
 /** Capabilities for test prompt assembly. */
 const testCapabilities = [emailSend, listDocuments, readDocument, writeDocument];
@@ -44,7 +44,9 @@ function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
     capabilities: testCapabilities,
     credits: 1_000_000n,
+    domain: "ok.lol",
     documents: withDefaults([]),
+    name: "bot",
     username: "test",
     ...overrides,
   };
@@ -120,10 +122,11 @@ describe("assemblePrompt", () => {
       caller: {
         accountId: "acc-1",
         hireId: "hire-1",
+        name: "Alice",
         username: "alice",
       },
     }));
-    expect(prompt).toContain("hired by alice@ok.lol");
+    expect(prompt).toContain("hired by Alice (alice@ok.lol)");
     expect(prompt).toContain("hire-1");
   });
 

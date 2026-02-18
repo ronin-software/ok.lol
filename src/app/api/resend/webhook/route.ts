@@ -1,5 +1,5 @@
-import emailReceive from "@/capabilities/email/email.receive";
 import { getExecutionContext } from "@/capabilities/_execution-context";
+import emailReceive from "@/capabilities/email/email.receive";
 import { db } from "@/db";
 import { principal } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -7,6 +7,7 @@ import { resend } from "@/lib/resend";
 import { secret } from "@/lib/session";
 import { eq } from "drizzle-orm";
 import { SignJWT } from "jose";
+import type { GetReceivingEmailResponseSuccess } from "resend";
 
 /**
  * POST /api/resend/webhook
@@ -81,8 +82,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const ectx = await getExecutionContext(jwt);
-    await emailReceive.call(ectx, email);
+    const ectx = await getExecutionContext({ jwt });
+    await emailReceive(ectx, email as GetReceivingEmailResponseSuccess);
     return new Response("ok");
   } catch (error) {
     return Response.json({ message: "email-receive capability call failed", error }, { status: 500 });

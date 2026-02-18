@@ -4,14 +4,12 @@
  * Probes each registered worker's capability directory (GET /),
  * persists the reported hostname, then builds AI SDK tools that
  * sign and forward calls via HMAC. Offline workers are silently skipped.
- *
- * All traffic to workers goes through the tunnel relay and is gated
- * by a shared `X-Tunnel-Key` header. Egress is metered per-call.
  */
 
 import { db } from "@/db";
-import { usage, worker } from "@/db/schema";
-import { debit } from "@/lib/tigerbeetle";
+import { worker } from "@/db/schema";
+import { recordUsage } from "@/lib/billing";
+import { probe, tunnelHeaders } from "@/lib/tunnel";
 import { hmac } from "@ok.lol/astral";
 import type { CapabilitySpec } from "@ok.lol/capability";
 import { tool } from "ai";
@@ -37,12 +35,6 @@ type Endpoint = {
   url: string;
 };
 
-/** Timeout for probing a worker's directory endpoint. */
-const PROBE_TIMEOUT_MS = 3_000;
-
-/** Shared secret for the tunnel relay's request gate. */
-const TUNNEL_KEY = process.env.TUNNEL_KEY ?? "";
-
 // –
 // Discovery
 // –
@@ -64,49 +56,36 @@ export async function discover(accountId: string): Promise<Endpoint[]> {
 
   await Promise.all(
     rows.map(async (row) => {
-      try {
-        const res = await fetch(row.url, {
-          headers: tunnelHeaders(),
-          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-        });
-        if (!res.ok) return;
+      const body = await probe(row.url);
+      if (!body || !Array.isArray(body.capabilities)) return;
 
-        const body = (await res.json()) as {
-          capabilities?: unknown;
-          name?: unknown;
-        };
-        if (!Array.isArray(body.capabilities)) return;
+      // Filter to capabilities with full wire metadata.
+      const valid = body.capabilities.filter(
+        (c): c is WireCapability =>
+          c != null &&
+          typeof c === "object" &&
+          typeof (c as Record<string, unknown>).name === "string" &&
+          (c as Record<string, unknown>).inputSchema != null &&
+          (c as Record<string, unknown>).outputSchema != null,
+      );
+      if (valid.length === 0) return;
 
-        // Filter to capabilities with full wire metadata.
-        const valid = body.capabilities.filter(
-          (c): c is WireCapability =>
-            c != null &&
-            typeof c === "object" &&
-            typeof (c as Record<string, unknown>).name === "string" &&
-            (c as Record<string, unknown>).inputSchema != null &&
-            (c as Record<string, unknown>).outputSchema != null,
-        );
-        if (valid.length === 0) return;
-
-        // Persist the worker-reported hostname.
-        const wireName = typeof body.name === "string" ? body.name : null;
-        if (wireName) {
-          await db
-            .update(worker)
-            .set({ name: wireName })
-            .where(eq(worker.id, row.id));
-        }
-
-        results.push({
-          accountId,
-          capabilities: valid,
-          name: wireName ?? row.id,
-          secret: row.secret,
-          url: row.url.replace(/\/$/, ""),
-        });
-      } catch {
-        // Worker offline or unreachable — skip.
+      // Persist the worker-reported hostname.
+      const wireName = typeof body.name === "string" ? body.name : null;
+      if (wireName) {
+        await db
+          .update(worker)
+          .set({ name: wireName })
+          .where(eq(worker.id, row.id));
       }
+
+      results.push({
+        accountId,
+        capabilities: valid,
+        name: wireName ?? row.id,
+        secret: row.secret,
+        url: row.url.replace(/\/$/, ""),
+      });
     }),
   );
 
@@ -161,16 +140,6 @@ export function makeTools(endpoints: Endpoint[], billing?: BillingContext) {
 }
 
 // –
-// Tunnel
-// –
-
-/** Headers for requests routed through the tunnel relay. */
-function tunnelHeaders(): Record<string, string> {
-  if (!TUNNEL_KEY) return {};
-  return { "X-Tunnel-Key": TUNNEL_KEY };
-}
-
-// –
 // Egress metering
 // –
 
@@ -201,10 +170,7 @@ const REGION_TIER: Record<string, number> = {
   bom: 0.00012, maa: 0.00012,
 };
 
-/** Default rate when region is unknown. */
 const DEFAULT_RATE = 0.00002;
-
-/** Platform fee multiplier (5%). */
 const PLATFORM_FEE = 1.05;
 
 /** Record tunnel egress for a single worker call. */
@@ -219,17 +185,14 @@ async function recordEgress(
 
   const rate = (region ? REGION_TIER[region] : undefined) ?? DEFAULT_RATE;
   const cost = BigInt(Math.ceil(totalBytes * rate * PLATFORM_FEE));
-  if (cost <= 0n) return;
 
-  await db.insert(usage).values({
+  await recordUsage({
     accountId: ctx.accountId,
     amount: BigInt(totalBytes),
     cost,
     hireId: ctx.hireId,
     resource: "tunnel:egress",
   });
-
-  await debit(BigInt(ctx.accountId), cost);
 }
 
 // –
@@ -257,11 +220,9 @@ function callWorker(
       method: "POST",
     });
 
-    // Read the full response for metering before parsing.
     const responseText = await res.text();
     const region = res.headers.get("fly-region");
 
-    // Fire-and-forget egress recording.
     recordEgress(ctx, body.length, responseText.length, region).catch(() => {});
 
     if (!res.ok) {

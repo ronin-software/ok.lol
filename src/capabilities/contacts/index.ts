@@ -38,7 +38,6 @@ type LookupOutput = z.infer<typeof lookupOutput>;
  * Returns null if the email is not in the contact list.
  */
 export const lookupContact: Capability<OriginExecutionContext, LookupInput, LookupOutput> = {
-  available: async () => true,
   async call(ectx, input) {
     const row = await findContact(ectx.principal.id, input.email);
     if (!row) return null;
@@ -49,7 +48,6 @@ export const lookupContact: Capability<OriginExecutionContext, LookupInput, Look
       relationship: row.relationship,
     };
   },
-  setup: async () => {},
 
   description:
     "Look up a contact by email — returns their name, relationship (owner/contact), " +
@@ -73,11 +71,9 @@ type RecordInput = z.infer<typeof recordInput>;
 
 /** Add a new contact or confirm an existing one. Does not overwrite existing records. */
 export const recordContact: Capability<OriginExecutionContext, RecordInput, void> = {
-  available: async () => true,
   async call(ectx, input) {
     await upsertContact(ectx.principal.id, input);
   },
-  setup: async () => {},
 
   description: "Record a new contact (name + email). No-op if the contact already exists.",
   name: "record_contact",

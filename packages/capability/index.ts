@@ -22,15 +22,15 @@ export interface Capability<TExecutionContext, TInput, TOutput> {
   // Functions
   // –
 
-  /** Returns whether the capability is available. */
-  available: () => Promise<boolean>;
+  /** Returns whether the capability is available. Defaults to `() => true`. */
+  available?: () => Promise<boolean>;
   /** Calls the capability with the execution context (if any) and the provided input. */
   call: (...args: TExecutionContext extends void
     ? [input: TInput]
     : [ectx: TExecutionContext, input: TInput]
   ) => Promise<TOutput>;
-  /** Sets up the capability. Returns early if already set up. Throws on failure. */
-  setup: () => Promise<void>;
+  /** Sets up the capability. Returns early if already set up. Defaults to no-op. */
+  setup?: () => Promise<void>;
 
   // –
   // Identity

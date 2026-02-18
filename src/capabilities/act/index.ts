@@ -1,13 +1,10 @@
-import { db } from "@/db";
-import { usage } from "@/db/schema";
-import { insertMessage } from "@/db/threads";
 import { assert } from "@/lib/assert";
+import { dollarsToMicro, recordUsage } from "@/lib/billing";
 import { env } from "@/lib/env";
-import { debit } from "@/lib/tigerbeetle";
+import { gateway } from "@/lib/gateway";
 import type { UIMessage } from "ai";
 import {
   convertToModelMessages,
-  createGateway,
   stepCountIs,
   streamText,
 } from "ai";
@@ -28,12 +25,9 @@ import * as workers from "./workers";
  * - Streaming (HTTP):     `result.toUIMessageStreamResponse()`
  * - Non-streaming (email): `await result.text`
  *
- * Usage recording fires automatically in `onFinish`. Cost is reported
- * by the Vercel AI Gateway via `providerMetadata.gateway.cost`.
+ * Usage recording fires automatically in `onFinish`. Message persistence
+ * is handled by callers via `dispatch.persistOutput`.
  */
-
-/** AI Gateway provider instance. */
-const gateway = createGateway();
 
 /** Default model ID (gateway format: provider/model). */
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-5-20250929";
@@ -49,8 +43,6 @@ type Input = {
   model?: string;
   /** Single prompt for one-shot invocations. */
   prompt?: string;
-  /** Thread ID for message persistence. */
-  threadId?: string;
 };
 
 /** Runs the agent loop. Returns a stream result for the caller to consume. */
@@ -88,43 +80,14 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     ? { messages: await convertToModelMessages(input.messages) }
     : { prompt: input.prompt! };
 
-  const threadId = input.threadId;
-
   return streamText({
     model: gateway(modelId),
     ...messageInput,
     stopWhen: stepCountIs(MAX_STEPS),
     system,
     tools,
-    onFinish: async ({ providerMetadata, steps }) => {
-      await recordUsage(ectx, modelId, providerMetadata);
-
-      // Persist tool call messages when we have a thread.
-      if (threadId) {
-        for (const step of steps) {
-          for (const call of step.toolCalls) {
-            const c = call as Record<string, unknown>;
-            await insertMessage({
-              content: JSON.stringify({ args: c.args, name: c.toolName }),
-              metadata: { toolCallId: c.toolCallId, toolName: c.toolName },
-              role: "tool",
-              threadId,
-            });
-          }
-          for (const result of step.toolResults) {
-            const r = result as Record<string, unknown>;
-            const content = typeof r.result === "string"
-              ? r.result
-              : (r.result == null ? "(void)" : JSON.stringify(r.result));
-            await insertMessage({
-              content,
-              metadata: { toolCallId: r.toolCallId, toolName: r.toolName },
-              role: "tool",
-              threadId,
-            });
-          }
-        }
-      }
+    onFinish: async ({ providerMetadata }) => {
+      await recordModelUsage(ectx, modelId, providerMetadata);
     },
   });
 }
@@ -133,14 +96,8 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
 // Usage
 // –
 
-/** Converts a dollar string (e.g. "0.0045405") to micro-USD bigint. */
-function dollarsToMicro(dollars: string): bigint {
-  const micro = Math.round(parseFloat(dollars) * 1_000_000);
-  return BigInt(micro);
-}
-
-/** Records gateway-reported cost in the DB and debits the principal's account. */
-async function recordUsage(
+/** Records gateway-reported cost via the billing module. */
+async function recordModelUsage(
   ectx: OriginExecutionContext,
   model: string,
   metadata: Record<string, Record<string, unknown>> | undefined,
@@ -149,13 +106,11 @@ async function recordUsage(
   const cost = dollarsToMicro(costStr);
   if (cost <= 0n) return;
 
-  await db.insert(usage).values({
+  await recordUsage({
     accountId: ectx.principal.accountId,
     amount: 1n,
     cost,
     hireId: ectx.caller?.hireId,
     resource: model,
   });
-
-  await debit(BigInt(ectx.principal.accountId), cost);
 }

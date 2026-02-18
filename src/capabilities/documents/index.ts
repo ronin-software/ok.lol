@@ -27,7 +27,6 @@ type ListOutput = z.infer<typeof listOutput>;
 
 /** List all document paths for this principal. */
 export const listDocuments: Capability<OriginExecutionContext, ListInput, ListOutput> = {
-  available: async () => true,
   async call(ectx) {
     // DISTINCT ON picks the latest row per path without fetching all versions.
     const rows = await db.execute<{ path: string }>(sql`
@@ -39,7 +38,6 @@ export const listDocuments: Capability<OriginExecutionContext, ListInput, ListOu
 
     return { paths: rows.map((r) => r.path) };
   },
-  setup: async () => {},
 
   description: "List all your document paths",
   name: "list_documents",
@@ -68,7 +66,6 @@ type ReadOutput = z.infer<typeof readOutput>;
 
 /** Read a single document by path. Returns the latest version. */
 export const readDocument: Capability<OriginExecutionContext, ReadInput, ReadOutput> = {
-  available: async () => true,
   async call(ectx, { path }) {
     assert(path.length > 0, "path must be non-empty");
 
@@ -94,7 +91,6 @@ export const readDocument: Capability<OriginExecutionContext, ReadInput, ReadOut
       updatedAt: match.createdAt.toISOString(),
     };
   },
-  setup: async () => {},
 
   description: "Read one of your documents by path. Returns the latest version",
   name: "read_document",
@@ -121,7 +117,6 @@ type WriteOutput = z.infer<typeof writeOutput>;
 
 /** Write or update a document. Inserts a new version (append-only). */
 export const writeDocument: Capability<OriginExecutionContext, WriteInput, WriteOutput> = {
-  available: async () => true,
   async call(ectx, { content, path }) {
     assert(path.length > 0, "path must be non-empty");
     assert(content.length > 0, "content must be non-empty");
@@ -135,7 +130,6 @@ export const writeDocument: Capability<OriginExecutionContext, WriteInput, Write
 
     return { path, written: true };
   },
-  setup: async () => {},
 
   description: "Write or update one of your documents. Creates a new version",
   name: "write_document",

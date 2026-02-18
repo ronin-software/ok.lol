@@ -17,7 +17,8 @@ import {
   insertMessage,
 } from "@/db/threads";
 import { assert } from "@/lib/assert";
-import { createGateway, generateText } from "ai";
+import { gateway } from "@/lib/gateway";
+import { generateText } from "ai";
 
 /** Fast model for summarization to minimize cost and latency. */
 const SUMMARIZE_MODEL = "anthropic/claude-3-5-haiku-20241022";
@@ -27,9 +28,6 @@ const SUMMARIZE_MODEL = "anthropic/claude-3-5-haiku-20241022";
  * ~80% of a 200k context window, leaving room for system prompt + response.
  */
 const TOKEN_THRESHOLD = 160_000;
-
-/** Gateway instance for summarization calls. */
-const gateway = createGateway();
 
 /**
  * Check whether a thread needs summarization. If so, summarize.
