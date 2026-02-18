@@ -1,12 +1,10 @@
-import { getExecutionContext } from "@/capabilities/_execution-context";
+import { getExecutionContext } from "@/capabilities/context";
 import emailReceive from "@/capabilities/email/email.receive";
 import { db } from "@/db";
 import { principal } from "@/db/schema";
 import { env } from "@/lib/env";
 import { resend } from "@/lib/resend";
-import { secret } from "@/lib/session";
 import { eq } from "drizzle-orm";
-import { SignJWT } from "jose";
 import type { GetReceivingEmailResponseSuccess } from "resend";
 
 /**
@@ -45,7 +43,7 @@ export async function POST(req: Request) {
     return new Response("ok");
   }
 
-  // Resolve target principal from the "to" address
+  // Resolve target principal from the "to" address.
   const toAddress = event.data.to?.[0];
   if (!toAddress) {
     return new Response("No recipient", { status: 400 });
@@ -59,7 +57,7 @@ export async function POST(req: Request) {
   const username = toAddress.split("@")[0]!;
 
   const [row] = await db
-    .select()
+    .select({ id: principal.id })
     .from(principal)
     .where(eq(principal.username, username))
     .limit(1);
@@ -67,13 +65,7 @@ export async function POST(req: Request) {
     return new Response("Unknown principal", { status: 404 });
   }
 
-  // Issue a short-lived JWT for this execution
-  const jwt = await new SignJWT({ sub: row.id })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("5m")
-    .sign(secret());
-
-  // The webhook payload omits the body; fetch it via the receiving API.
+  // Fetch the full email body (the webhook payload omits it).
   const { data: email, error } = await resend.emails.receiving.get(
     event.data.email_id,
   );
@@ -82,7 +74,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const ectx = await getExecutionContext({ jwt });
+    const ectx = await getExecutionContext({ principalId: row.id });
     await emailReceive(ectx, email as GetReceivingEmailResponseSuccess);
     return new Response("ok");
   } catch (error) {

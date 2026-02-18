@@ -8,12 +8,11 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import type { OriginExecutionContext } from "../_execution-context";
-import { logCall } from "../_log";
+import type { OriginExecutionContext } from "../context";
 import { withDefaults } from "../documents/defaults";
+import { logCall } from "../log";
 import { assemblePrompt } from "./prompt";
-import { makeTools } from "./tools";
-import * as workers from "./workers";
+import { buildTools } from "./tools";
 
 /**
  * The agent loop. Processes input through multi-step inference, calling
@@ -54,28 +53,19 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   await logCall(ectx, "act", input);
   const modelId = input.model ?? DEFAULT_MODEL;
 
-  // Build origin tools and discover remote worker tools.
-  const origin = makeTools(ectx);
-  const endpoints = await workers.discover(ectx.principal.accountId);
-  const remote = workers.makeTools(endpoints, {
-    accountId: ectx.principal.accountId,
-    hireId: ectx.caller?.hireId,
-  });
-
-  // Assemble context.
+  // Build all tools (origin + remote workers) and assemble context.
+  const { capabilities, tools } = await buildTools(ectx);
   const documents = withDefaults(ectx.principal.documents);
   const system = assemblePrompt({
     caller: ectx.caller,
-    capabilities: [...origin.capabilities, ...remote.directory],
+    capabilities,
     credits: ectx.principal.credits,
     domain: env.EMAIL_DOMAIN,
     documents,
     name: ectx.principal.name,
     username: ectx.principal.username,
   });
-  const tools = { ...origin.tools, ...remote.tools };
 
-  // Convert UI messages to model messages, or use prompt directly.
   const messageInput = input.messages
     ? { messages: await convertToModelMessages(input.messages) }
     : { prompt: input.prompt! };

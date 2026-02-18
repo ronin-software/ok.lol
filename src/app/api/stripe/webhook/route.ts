@@ -1,16 +1,16 @@
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { seedOwnerContact } from "@/db/contacts";
-import { account, principal } from "@/db/schema";
+import { account } from "@/db/schema";
+import { seedPrincipal } from "@/lib/accounts";
 import { env } from "@/lib/env";
 import { centsToMicro, stripe } from "@/lib/stripe";
 import * as tb from "@/lib/tigerbeetle";
+import { eq } from "drizzle-orm";
 
 /**
  * POST /api/stripe/webhook
  *
  * Handles Stripe webhook events:
- * - checkout.session.completed — funding credits
+ * - checkout.session.completed — funding credits (+ principal creation for pal registration)
  * - payment_intent.succeeded — auto-top-up charges
  * - account.updated — Connect onboarding completion
  */
@@ -21,18 +21,10 @@ export async function POST(req: Request) {
 
   let event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      env.STRIPE_WEBHOOK_SECRET,
-    );
+    event = stripe.webhooks.constructEvent(body, signature, env.STRIPE_WEBHOOK_SECRET);
   } catch {
     return new Response("Invalid signature", { status: 400 });
   }
-
-  // –
-  // Checkout funding
-  // –
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
@@ -44,31 +36,9 @@ export async function POST(req: Request) {
     await tb.bootstrap();
     await tb.fund(BigInt(accountId), centsToMicro(cents));
 
-    // Create principal if this checkout was a pal registration.
-    const username = session.metadata?.username;
-    const name = session.metadata?.name;
-    if (username && name) {
-      const [inserted] = await db
-        .insert(principal)
-        .values({ accountId, name, username })
-        .onConflictDoNothing()
-        .returning({ id: principal.id });
-
-      // Seed owner contact — mirrors funded route, idempotent via onConflictDoNothing.
-      if (inserted) {
-        const [acc] = await db
-          .select({ email: account.email, name: account.name })
-          .from(account)
-          .where(eq(account.id, accountId))
-          .limit(1);
-        if (acc) await seedOwnerContact(inserted.id, acc.email, acc.name);
-      }
-    }
+    const { username, name } = session.metadata ?? {};
+    if (username && name) await seedPrincipal(accountId, username, name);
   }
-
-  // –
-  // Auto-top-up
-  // –
 
   if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object;
@@ -78,18 +48,13 @@ export async function POST(req: Request) {
     await tb.fund(BigInt(accountId), centsToMicro(intent.amount ?? 0));
   }
 
-  // –
-  // Connect onboarding
-  // –
-
   if (event.type === "account.updated") {
     const connectAccount = event.data.object;
     if (connectAccount.payouts_enabled) {
-      const connectId = connectAccount.id;
       await db
         .update(account)
-        .set({ stripeConnectId: connectId })
-        .where(eq(account.stripeConnectId, connectId));
+        .set({ stripeConnectId: connectAccount.id })
+        .where(eq(account.stripeConnectId, connectAccount.id));
     }
   }
 

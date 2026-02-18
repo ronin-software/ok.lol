@@ -1,5 +1,5 @@
 import { assert } from "@/lib/assert";
-import type { Document } from "../_execution-context";
+import type { Document } from "../context";
 
 /**
  * Default document templates for core paths.

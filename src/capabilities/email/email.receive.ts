@@ -9,10 +9,10 @@
 import { createThread, findEmailThread, insertMessage } from "@/db/threads";
 import { normalizeSubject, stripQuotedReply } from "@/lib/email";
 import type { GetReceivingEmailResponseSuccess } from "resend";
-import type { OriginExecutionContext } from "../_execution-context";
-import { logCall } from "../_log";
 import act from "../act";
-import { persistOutput } from "../act/dispatch";
+import { persistOutput } from "../act/persist";
+import type { OriginExecutionContext } from "../context";
+import { logCall } from "../log";
 import { summarizeIfNeeded } from "../threads/summarize";
 
 /** Process a received email through the agent loop. */

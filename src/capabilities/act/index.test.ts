@@ -1,7 +1,7 @@
 import { createGateway, generateText, stepCountIs, tool } from "ai";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import type { Document } from "../_execution-context";
+import type { Document } from "../context";
 import { listDocuments, readDocument, writeDocument } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
 import emailSend from "../email/email.send";

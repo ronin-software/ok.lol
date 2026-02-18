@@ -1,6 +1,6 @@
-import { getExecutionContext } from "@/capabilities/_execution-context";
 import act from "@/capabilities/act";
-import { autoTitle, persistOutput } from "@/capabilities/act/dispatch";
+import { autoTitle, persistOutput } from "@/capabilities/act/persist";
+import { getExecutionContext } from "@/capabilities/context";
 import { summarizeIfNeeded } from "@/capabilities/threads/summarize";
 import { createThread, insertMessage } from "@/db/threads";
 import { verify } from "@/lib/session";

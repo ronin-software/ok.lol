@@ -74,15 +74,19 @@ type Claims = {
 /** How the caller was identified. */
 type Source =
   | { accountId: string }
-  | { jwt: string };
+  | { jwt: string }
+  | { principalId: string };
 
 /**
- * Resolve an OriginExecutionContext from either a JWT or a session accountId.
+ * Resolve an OriginExecutionContext from a JWT, session accountId, or
+ * a known principalId (e.g. webhook handlers that have already resolved
+ * the principal from their own DB query).
  *
  * - `{ jwt }`: verifies the token, extracts principalId + optional hireId.
  * - `{ accountId }`: looks up the principal by owning account.
+ * - `{ principalId }`: looks up the principal directly (no hire support).
  *
- * Both paths resolve the principal's documents and credit balance.
+ * All paths resolve the principal's documents and credit balance.
  * The JWT path additionally supports hire-based execution (caller + skill injection).
  */
 export async function getExecutionContext(source: Source): Promise<OriginExecutionContext> {
@@ -96,6 +100,8 @@ export async function getExecutionContext(source: Source): Promise<OriginExecuti
     assert(claims.sub, "JWT missing sub claim");
     principalId = claims.sub;
     hireId = claims.hireId;
+  } else if ("principalId" in source) {
+    principalId = source.principalId;
   } else {
     accountId = source.accountId;
   }

@@ -1,6 +1,6 @@
 import { assert } from "@/lib/assert";
 import type { CapabilitySpec } from "@ok.lol/capability";
-import type { Document, OriginExecutionContext } from "../_execution-context";
+import type { Document, OriginExecutionContext } from "../context";
 
 /**
  * Budget-aware system prompt assembly.

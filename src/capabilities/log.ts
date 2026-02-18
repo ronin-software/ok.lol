@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { log } from "@/db/schema";
-import type { OriginExecutionContext } from "./_execution-context";
+import type { OriginExecutionContext } from "./context";
 
 /** Record a capability invocation in the log table. */
 export async function logCall(

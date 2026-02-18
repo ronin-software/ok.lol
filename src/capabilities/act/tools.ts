@@ -1,20 +1,21 @@
 /**
  * Tool registry for the `act` agent loop.
  *
- * Auto-derives AI SDK tools from the capabilities array via `toTool`,
- * wrapping each with automatic logging.
+ * `buildTools(ectx)` is the single entry point — it assembles both origin
+ * capabilities and discovered remote worker tools, returning a merged set
+ * ready for the model. Workers are imported as internals; callers never
+ * need to touch workers.ts directly.
  */
 
 import { assert } from "@/lib/assert";
 import { toTool, type Capability } from "@ok.lol/capability";
 import type { Tool } from "ai";
-import type { OriginExecutionContext } from "../_execution-context";
-import { logCall } from "../_log";
-import { lookupContact, recordContact } from "../contacts";
-import lookupOwner from "../contacts/owner";
-import httpGet from "../http";
+import { lookupContact, lookupOwner, recordContact } from "../contacts";
+import type { OriginExecutionContext } from "../context";
 import { listDocuments, readDocument, writeDocument } from "../documents";
 import emailSend from "../email/email.send";
+import httpGet from "../http";
+import { logCall } from "../log";
 import {
   expandSummary,
   followUp,
@@ -22,9 +23,10 @@ import {
   readThread,
   searchThreads,
 } from "../threads";
+import * as workers from "./workers";
 
 /** Origin capabilities exposed as tools. */
-const capabilities = [
+const ORIGIN_CAPABILITIES = [
   emailSend,
   expandSummary,
   followUp,
@@ -56,20 +58,34 @@ function withLogging(
   } as Tool<unknown, unknown>;
 }
 
-/** Build AI SDK tools and a capabilities listing from origin capabilities. */
-export function makeTools(ectx: OriginExecutionContext) {
+/**
+ * Build all AI SDK tools for the agent loop: origin capabilities + remote
+ * worker tools. Discovers workers in parallel with tool construction.
+ *
+ * Returns merged `tools` (for the model) and `capabilities` (for the prompt
+ * directory).
+ */
+export async function buildTools(ectx: OriginExecutionContext) {
   assert(ectx.principal.username, "principal must have a username");
   assert(ectx.principal.id, "principal must have an id");
 
   type AnyOriginCap = Capability<OriginExecutionContext, unknown, unknown>;
 
+  const originTools = Object.fromEntries(
+    ORIGIN_CAPABILITIES.map((c) => {
+      const baseTool = toTool(c as AnyOriginCap, ectx);
+      return [c.name, withLogging(c.name, baseTool, ectx)];
+    }),
+  );
+
+  const endpoints = await workers.discover(ectx.principal.accountId);
+  const remote = workers.makeTools(endpoints, {
+    accountId: ectx.principal.accountId,
+    hireId: ectx.caller?.hireId,
+  });
+
   return {
-    capabilities,
-    tools: Object.fromEntries(
-      capabilities.map((c) => {
-        const baseTool = toTool(c as AnyOriginCap, ectx);
-        return [c.name, withLogging(c.name, baseTool, ectx)];
-      }),
-    ),
+    capabilities: [...ORIGIN_CAPABILITIES, ...remote.directory],
+    tools: { ...originTools, ...remote.tools },
   };
 }

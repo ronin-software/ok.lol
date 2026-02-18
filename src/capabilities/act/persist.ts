@@ -1,5 +1,5 @@
 /**
- * Message lifecycle: persist agent output and auto-title threads.
+ * Message persistence: save agent output and auto-title threads.
  *
  * Both the chat route and email-receive handler use these functions
  * to complete the lifecycle after the agent loop finishes. Centralizing
@@ -51,7 +51,7 @@ export async function persistOutput(
     for (const call of step.toolCalls) {
       const c = call as Record<string, unknown>;
       await insertMessage({
-        content: JSON.stringify({ input: c.input, name: c.toolName }),
+        content: JSON.stringify({ input: c.input ?? {}, name: c.toolName }),
         metadata: { toolCallId: c.toolCallId, toolName: c.toolName },
         role: "tool",
         threadId,
@@ -102,7 +102,8 @@ function buildParts(
       const c = call as Record<string, unknown>;
       const r = resultsByCallId.get(c.toolCallId) as Record<string, unknown> | undefined;
       parts.push({
-        input: c.input,
+        // Normalize null/undefined to {} — Anthropic rejects null tool inputs.
+        input: c.input ?? {},
         output: r?.result ?? null,
         state: "output-available",
         toolCallId: c.toolCallId,

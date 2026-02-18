@@ -1,11 +1,9 @@
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { account, principal } from "@/db/schema";
+import { principal } from "@/db/schema";
+import { upsertAccount } from "@/lib/accounts";
 import { verifyToken } from "@/lib/auth";
 import { create as createSession } from "@/lib/session";
-import { createCustomer, stripe } from "@/lib/stripe";
-import { id as tbId } from "@/lib/tigerbeetle";
-import * as tb from "@/lib/tigerbeetle";
+import { eq } from "drizzle-orm";
 
 /** Platform cookie — tells downstream routes (checkout, funded) to deep-link. */
 const PLATFORM_COOKIE = "platform";
@@ -30,7 +28,6 @@ export async function GET(req: Request) {
   const accountId = await upsertAccount(payload.email);
   if (!accountId) return redirect(url.origin, "/sign-in");
 
-  // Build response with session cookie.
   const headers = new Headers();
   headers.append("Set-Cookie", await createSession(accountId));
 
@@ -55,67 +52,6 @@ export async function GET(req: Request) {
   return new Response(null, { headers, status: 302 });
 }
 
-// –
-// Account upsert
-// –
-
-/**
- * Find or create an account for the given email.
- * Returns the account ID, or null on unrecoverable failure.
- */
-async function upsertAccount(email: string): Promise<string | null> {
-  // Existing account?
-  const existing = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(eq(account.email, email))
-    .then((rows) => rows[0]);
-  if (existing) return existing.id;
-
-  // Create Stripe customer + account row + TigerBeetle ledger entry.
-  const accountId = String(tbId());
-  let stripeCustomerId: string;
-  try {
-    stripeCustomerId = await createCustomer(email, accountId);
-  } catch (err) {
-    console.error("[auth/verify] Stripe customer creation failed:", err);
-    return null;
-  }
-
-  try {
-    await db.insert(account).values({
-      email,
-      id: accountId,
-      stripeCustomerId,
-    });
-  } catch {
-    // Race condition — another request created the account.
-    await stripe.customers.del(stripeCustomerId).catch(logError);
-    const raced = await db
-      .select({ id: account.id })
-      .from(account)
-      .where(eq(account.email, email))
-      .then((rows) => rows[0]);
-    return raced?.id ?? null;
-  }
-
-  try {
-    await tb.bootstrap();
-    await tb.createAccount(BigInt(accountId));
-  } catch (err) {
-    console.error("[auth/verify] TigerBeetle account creation failed:", err);
-    await db.delete(account).where(eq(account.id, accountId)).catch(logError);
-    await stripe.customers.del(stripeCustomerId).catch(logError);
-    return null;
-  }
-
-  return accountId;
-}
-
-// –
-// Helpers
-// –
-
 function platformCookie(): string {
   const parts = [
     `${PLATFORM_COOKIE}=mobile`,
@@ -133,8 +69,4 @@ function redirect(origin: string, path: string) {
     headers: { Location: `${origin}${path}` },
     status: 302,
   });
-}
-
-function logError(err: unknown) {
-  console.error("[auth/verify] Rollback failed:", err);
 }

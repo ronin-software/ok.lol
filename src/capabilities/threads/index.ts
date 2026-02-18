@@ -19,7 +19,7 @@ import {
 import { assert } from "@/lib/assert";
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
-import type { OriginExecutionContext } from "../_execution-context";
+import type { OriginExecutionContext } from "../context";
 import emailSend from "../email/email.send";
 
 // –

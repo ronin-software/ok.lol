@@ -3,13 +3,13 @@
  * include tool-invocation parts for the UI.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { db } from "@/db";
-import { message, thread } from "@/db/schema";
+import { message } from "@/db/schema";
 import { cleanup, hasDb, seedAccount, seedPrincipal } from "@/db/test-helpers";
 import { createThread } from "@/db/threads";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { persistOutput } from "./dispatch";
+import { persistOutput } from "./persist";
 
 const HAS_DB = await hasDb();
 let principalId: string;

@@ -4,11 +4,11 @@
  * Requires a local Postgres instance (Docker Compose). Skips if unreachable.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { seedOwnerContact } from "@/db/contacts";
 import { cleanup, hasDb, seedAccount, seedPrincipal } from "@/db/test-helpers";
-import type { OriginExecutionContext } from "../_execution-context";
-import lookupOwner from "./owner";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { lookupOwner } from ".";
+import type { OriginExecutionContext } from "../context";
 
 const HAS_DB = await hasDb();
 let principalId: string;

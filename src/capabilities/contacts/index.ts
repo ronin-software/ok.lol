@@ -6,10 +6,10 @@
  * written and read via the existing document tools.
  */
 
-import { findContact, upsertContact } from "@/db/contacts";
+import { findContact, findOwnerContact, upsertContact } from "@/db/contacts";
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
-import type { OriginExecutionContext } from "../_execution-context";
+import type { OriginExecutionContext } from "../context";
 
 // –
 // Lookup
@@ -80,4 +80,35 @@ export const recordContact: Capability<OriginExecutionContext, RecordInput, void
 
   inputSchema: recordInput,
   outputSchema: z.void(),
+};
+
+// –
+// Owner
+// –
+
+const ownerOutput = z.object({
+  email: z.string(),
+  name: z.string().nullable(),
+}).nullable();
+
+type OwnerOutput = z.infer<typeof ownerOutput>;
+
+/**
+ * Look up the account holder (owner) for the current principal.
+ * Zero-input tool — the principal is implicit from the execution context.
+ */
+export const lookupOwner: Capability<OriginExecutionContext, Record<string, never>, OwnerOutput> = {
+  async call(ectx) {
+    const row = await findOwnerContact(ectx.principal.id);
+    if (!row || !row.email) return null;
+    return { email: row.email, name: row.name };
+  },
+
+  description:
+    "Look up the account holder's email and name. " +
+    "Use this when you need to contact or identify the owner without knowing their email.",
+  name: "lookup_owner",
+
+  inputSchema: z.object({}),
+  outputSchema: ownerOutput,
 };

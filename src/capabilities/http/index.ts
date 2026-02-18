@@ -6,7 +6,7 @@
 
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
-import type { OriginExecutionContext } from "../_execution-context";
+import type { OriginExecutionContext } from "../context";
 
 const MAX_BODY = 64 * 1024;
 const TIMEOUT_MS = 10_000;

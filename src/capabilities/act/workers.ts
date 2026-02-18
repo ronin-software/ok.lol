@@ -9,6 +9,7 @@
 import { db } from "@/db";
 import { worker } from "@/db/schema";
 import { recordUsage } from "@/lib/billing";
+import { tunnelRate } from "@/lib/pricing";
 import { probe, tunnelHeaders } from "@/lib/tunnel";
 import { hmac } from "@ok.lol/astral";
 import type { CapabilitySpec } from "@ok.lol/capability";
@@ -143,36 +144,6 @@ export function makeTools(endpoints: Endpoint[], billing?: BillingContext) {
 // Egress metering
 // –
 
-/**
- * Fly region → egress pricing tier.
- *
- * Rates in micro-USD per byte:
- *   $0.02/GB → 0.00002   (NA, EU)
- *   $0.04/GB → 0.00004   (APAC, Oceania, SA)
- *   $0.12/GB → 0.00012   (Africa, India)
- */
-const REGION_TIER: Record<string, number> = {
-  // North America
-  atl: 0.00002, bos: 0.00002, den: 0.00002, dfw: 0.00002,
-  ewr: 0.00002, iad: 0.00002, lax: 0.00002, mia: 0.00002,
-  ord: 0.00002, phx: 0.00002, sea: 0.00002, sjc: 0.00002,
-  yul: 0.00002, yyz: 0.00002,
-  // Europe
-  ams: 0.00002, arn: 0.00002, cdg: 0.00002, fra: 0.00002,
-  lhr: 0.00002, mad: 0.00002, otp: 0.00002, waw: 0.00002,
-  // Asia Pacific / Oceania
-  hkg: 0.00004, nrt: 0.00004, sin: 0.00004, syd: 0.00004,
-  // South America
-  gig: 0.00004, gru: 0.00004, scl: 0.00004,
-  // Africa
-  jnb: 0.00012,
-  // India
-  bom: 0.00012, maa: 0.00012,
-};
-
-const DEFAULT_RATE = 0.00002;
-const PLATFORM_FEE = 1.05;
-
 /** Record tunnel egress for a single worker call. */
 async function recordEgress(
   ctx: BillingContext,
@@ -183,8 +154,7 @@ async function recordEgress(
   const totalBytes = requestBytes + responseBytes;
   if (totalBytes <= 0) return;
 
-  const rate = (region ? REGION_TIER[region] : undefined) ?? DEFAULT_RATE;
-  const cost = BigInt(Math.ceil(totalBytes * rate * PLATFORM_FEE));
+  const cost = BigInt(Math.ceil(totalBytes * tunnelRate(region)));
 
   await recordUsage({
     accountId: ctx.accountId,

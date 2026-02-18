@@ -5,7 +5,7 @@
  * per (principalId, path). These helpers encapsulate that dedup logic.
  */
 
-import type { Document } from "@/capabilities/_execution-context";
+import type { Document } from "@/capabilities/context";
 import { sql } from "drizzle-orm";
 import { db } from ".";
 

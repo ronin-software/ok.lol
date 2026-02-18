@@ -3,7 +3,7 @@ import { env } from "@/lib/env";
 import type { Capability } from "@ok.lol/capability";
 import { Resend, type CreateEmailOptions } from "resend";
 import { z } from "zod";
-import type { OriginExecutionContext } from "../_execution-context";
+import type { OriginExecutionContext } from "../context";
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -21,7 +21,7 @@ const inputSchema = z.object({
   subject: z.string().describe("Email subject line"),
   text: z.string().describe("Plain text email body"),
   /** Thread to persist this email in. Omit for fire-and-forget sends. */
-  threadId: z.string().uuid().optional().describe("Thread ID to persist this email in"),
+  threadId: z.uuid().optional().describe("Thread ID to persist this email in"),
   to: z.email().describe("Recipient email address"),
 });
 
