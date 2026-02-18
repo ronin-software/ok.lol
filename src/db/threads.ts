@@ -65,21 +65,22 @@ export async function recentThreads(
     conditions.push(eq(thread.channel, options.channel));
   }
 
-  // Subquery: latest message per thread.
+  // LATERAL subquery: for each thread, grab only its latest non-summary message.
+  // This keeps the message scan scoped to each thread (uses message_thread_created_idx)
+  // rather than materializing a window function over the entire message table.
   const latest = db
     .select({
       content: message.content,
       createdAt: message.createdAt,
       role: message.role,
-      threadId: message.threadId,
-      // Row number partitioned by thread, ordered newest first.
-      rn: sql<number>`row_number() over (partition by ${message.threadId} order by ${message.createdAt} desc)`.as("rn"),
     })
     .from(message)
     .where(and(
-      // Exclude summaries from the snippet.
+      eq(message.threadId, sql`${thread.id}`),
       sql`${message.role} != 'summary'`,
     ))
+    .orderBy(desc(message.createdAt))
+    .limit(1)
     .as("latest");
 
   const rows = await db
@@ -93,7 +94,7 @@ export async function recentThreads(
       title: thread.title,
     })
     .from(thread)
-    .leftJoin(latest, and(eq(latest.threadId, thread.id), eq(latest.rn, 1)))
+    .leftJoinLateral(latest, sql`true`)
     .where(and(...conditions))
     .orderBy(desc(sql`coalesce(${latest.createdAt}, ${thread.createdAt})`))
     .limit(limit);

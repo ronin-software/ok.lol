@@ -126,7 +126,10 @@ export const log = pgTable("log", {
   principalId: uuid("principal_id")
     .references(() => principal.id)
     .notNull(),
-});
+}, (t) => [
+  // Audit log queries per principal, newest first.
+  index("log_principal_created_idx").on(t.principalId, t.createdAt),
+]);
 
 // –
 // Listing
@@ -151,7 +154,10 @@ export const listing = pgTable("listing", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   /** Estimated max usage in micro-USD. Callers can adjust when hiring. */
   usageBudget: bigint("usage_budget", { mode: "bigint" }),
-});
+}, (t) => [
+  // All reads filter by principalId (load listings, act execution).
+  index("listing_principal_idx").on(t.principalId),
+]);
 
 // –
 // Hire
@@ -240,8 +246,11 @@ export const message = pgTable("message", {
   /** Estimated token count for context budgeting. */
   tokens: integer("tokens"),
 }, (t) => [
+  // threadMessages / activeContext / activeTokens: WHERE threadId = ? [AND summaryId IS NULL] ORDER BY createdAt
   index("message_thread_summary_idx").on(t.threadId, t.summaryId),
   index("message_thread_created_idx").on(t.threadId, t.createdAt),
+  // children() / expand(): WHERE summaryId = ? ORDER BY createdAt (threadId unknown at call site)
+  index("message_summary_created_idx").on(t.summaryId, t.createdAt),
 ]);
 
 // –
