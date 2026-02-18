@@ -33,6 +33,7 @@
     "@ai-sdk/react": "^3.0.88",
     "@ok.lol/astral": "workspace:*",
     "@ok.lol/capability": "workspace:*",
+    "@sentry/nextjs": "^10",
     "ai": "^6.0.86",
     "drizzle-orm": "catalog:",
     "jose": "^6.1.3",
