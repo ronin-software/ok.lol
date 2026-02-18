@@ -51,6 +51,37 @@ export const principal = pgTable("principal", {
 ]);
 
 // –
+// Contact
+// –
+
+/**
+ * People the principal knows.
+ *
+ * The "owner" contact is the account holder — seeded at principal creation
+ * from account.email. All other known parties are "contact".
+ *
+ * Structured identity lives here; narrative notes live in documents at the
+ * conventional path `contacts/{email}`, written by the principal as it learns.
+ */
+export const contact = pgTable("contact", {
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** Address used to reach this person. Nullable until known. */
+  email: text("email"),
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name"),
+  principalId: uuid("principal_id")
+    .references(() => principal.id)
+    .notNull(),
+  /** "owner" = the account holder; "contact" = everyone else. */
+  relationship: text("relationship", { enum: ["owner", "contact"] })
+    .notNull()
+    .default("contact"),
+}, (t) => [
+  index("contact_principal_idx").on(t.principalId),
+  index("contact_principal_email_idx").on(t.principalId, t.email),
+]);
+
+// –
 // Document
 // –
 

@@ -8,6 +8,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { db } from ".";
 import { message, thread } from "./schema";
+import { assert } from "@/lib/assert";
 
 // –
 // Token estimation
@@ -33,6 +34,19 @@ export async function createThread(
     .values({ channel, principalId, title })
     .returning({ id: thread.id });
   return row!.id;
+}
+
+/** Channel and title for a thread owned by the given principal. */
+export async function getThreadMeta(
+  threadId: string,
+  principalId: string,
+): Promise<{ channel: "chat" | "email"; title: string | null } | null> {
+  const [row] = await db
+    .select({ channel: thread.channel, title: thread.title })
+    .from(thread)
+    .where(and(eq(thread.id, threadId), eq(thread.principalId, principalId)))
+    .limit(1);
+  return row ?? null;
 }
 
 /** Update a thread's title. */
@@ -91,15 +105,32 @@ export async function recentThreads(
 // Message queries
 // –
 
-/** Insert a message into a thread. Returns the message ID. */
+/**
+ * Insert a message into a thread. Returns the message ID.
+ *
+ * `principalId` is required when writing as a principal (capabilities).
+ * Internal callers (email receive, summarizer) omit it — they operate
+ * on threads they already resolved via ownership-scoped queries.
+ */
 export async function insertMessage(values: {
   content: string;
   metadata?: unknown;
   parts?: unknown;
+  /** When provided, ownership is verified before writing. */
+  principalId?: string;
   role: "user" | "assistant" | "tool" | "summary";
   threadId: string;
   tokens?: number;
 }): Promise<string> {
+  if (values.principalId) {
+    const [row] = await db
+      .select({ id: thread.id })
+      .from(thread)
+      .where(and(eq(thread.id, values.threadId), eq(thread.principalId, values.principalId)))
+      .limit(1);
+    assert(row != null, `Thread not found or not owned: ${values.threadId}`);
+  }
+
   const [row] = await db
     .insert(message)
     .values({

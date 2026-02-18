@@ -1,14 +1,18 @@
 /**
- * Thread capabilities — list, search, read, and expand threads.
+ * Thread capabilities — list, search, read, expand, and follow up.
  *
  * These give the principal memory: it can browse conversations,
- * search across threads, read active context, and drill into summaries.
+ * search across threads, read active context, drill into summaries,
+ * and post follow-up messages to threads it owns.
  */
 
+import { findOwnerContact } from "@/db/contacts";
 import {
   activeContext,
   children as childrenOf,
   expand as expandTree,
+  getThreadMeta,
+  insertMessage,
   recentThreads,
   searchMessages,
 } from "@/db/threads";
@@ -16,6 +20,7 @@ import { assert } from "@/lib/assert";
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
 import type { OriginExecutionContext } from "../_execution-context";
+import emailSend from "../email/email.send";
 
 // –
 // List
@@ -207,4 +212,53 @@ export const expandSummary: Capability<OriginExecutionContext, ExpandInput, Expa
 
   inputSchema: expandInput,
   outputSchema: expandOutput,
+};
+
+// –
+// Follow up
+// –
+
+const followUpInput = z.object({
+  content: z.string().min(1).describe("Message to post"),
+  threadId: z.string().uuid().describe("Thread to post in"),
+});
+
+type FollowUpInput = z.infer<typeof followUpInput>;
+
+/** Post a message in a thread you're not currently acting in. */
+export const followUp: Capability<OriginExecutionContext, FollowUpInput, void> = {
+  available: async () => true,
+  async call(ectx, input) {
+    const meta = await getThreadMeta(input.threadId, ectx.principal.id);
+    assert(meta != null, `Thread not found or not owned: ${input.threadId}`);
+
+    if (meta.channel === "email") {
+      // Email threads require an actual send so the owner sees it in their inbox.
+      const owner = await findOwnerContact(ectx.principal.id);
+      assert(owner?.email != null, "Owner contact email not set");
+      await emailSend.call(ectx, {
+        subject: meta.title ? `Re: ${meta.title}` : "Follow-up",
+        text: input.content,
+        threadId: input.threadId,
+        to: owner.email,
+      });
+    } else {
+      // Chat (and any future in-app channel): write directly to the thread.
+      await insertMessage({
+        content: input.content,
+        principalId: ectx.principal.id,
+        role: "assistant",
+        threadId: input.threadId,
+      });
+    }
+  },
+  setup: async () => {},
+
+  description:
+    "Post a message in another thread. Use when a thread is waiting " +
+    "for information you now have — not to duplicate what the user already knows.",
+  name: "follow_up",
+
+  inputSchema: followUpInput,
+  outputSchema: z.void(),
 };

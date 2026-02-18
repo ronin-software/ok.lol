@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { principal } from "@/db/schema";
+import { seedOwnerContact } from "@/db/contacts";
+import { account, principal } from "@/db/schema";
 import { verify } from "@/lib/session";
 import { stripe } from "@/lib/stripe";
+import { eq } from "drizzle-orm";
 
 /**
  * GET /api/stripe/funded?session_id=cs_...
@@ -38,10 +40,23 @@ export async function GET(req: Request) {
       const username = session.metadata?.username;
       const name = session.metadata?.name;
       if (sessionAccountId === accountId && username && name) {
-        await db
+        const [inserted] = await db
           .insert(principal)
           .values({ accountId, name, username })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ id: principal.id });
+
+        // Seed the owner contact so the principal can reach its account holder.
+        if (inserted) {
+          const [acc] = await db
+            .select({ email: account.email, name: account.name })
+            .from(account)
+            .where(eq(account.id, accountId))
+            .limit(1);
+          if (acc) {
+            await seedOwnerContact(inserted.id, acc.email, acc.name);
+          }
+        }
       }
     } catch (err) {
       console.error("Funded redirect fulfillment failed:", err);
