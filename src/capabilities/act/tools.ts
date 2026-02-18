@@ -11,6 +11,8 @@ import type { Tool } from "ai";
 import type { OriginExecutionContext } from "../_execution-context";
 import { logCall } from "../_log";
 import { lookupContact, recordContact } from "../contacts";
+import lookupOwner from "../contacts/owner";
+import httpGet from "../http";
 import { listDocuments, readDocument, writeDocument } from "../documents";
 import emailSend from "../email/email.send";
 import {
@@ -26,9 +28,11 @@ const capabilities = [
   emailSend,
   expandSummary,
   followUp,
+  httpGet,
   listDocuments,
   listThreads,
   lookupContact,
+  lookupOwner,
   readDocument,
   readThread,
   recordContact,

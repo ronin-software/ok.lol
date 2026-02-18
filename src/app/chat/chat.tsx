@@ -100,18 +100,24 @@ export default function Chat() {
       return;
     }
     const stored: StoredMessage[] = await res.json();
-
-    const hydrated = stored
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({
-        id: m.id,
-        parts: (m.parts ?? [{ type: "text" as const, text: m.content }]) as UIMessage["parts"],
-        role: m.role as "user" | "assistant",
-      }));
-
-    setMessages(hydrated as UIMessage[]);
+    setMessages(hydrate(stored) as UIMessage[]);
     setDrawerOpen(false);
   }, [setMessages]);
+
+  // Re-fetch when idle so async agent messages (e.g. email follow-ups) appear.
+  useEffect(() => {
+    if (status !== "ready" || !threadId) return;
+    const id = setInterval(async () => {
+      const res = await fetch(`/api/threads/${threadId}`);
+      if (!res.ok) return;
+      const stored: StoredMessage[] = await res.json();
+      const next = hydrate(stored);
+      if (next.length > messages.length) {
+        setMessages(next as UIMessage[]);
+      }
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [status, threadId, messages.length, setMessages]);
 
   function newThread() {
     setThreadId(null);
@@ -278,10 +284,25 @@ export default function Chat() {
 }
 
 // –
-// Message
+// Hydration
 // –
 
 type UIMessage = ReturnType<typeof useChat>["messages"][number];
+
+/** Convert stored messages into the shape useChat expects. */
+function hydrate(stored: StoredMessage[]) {
+  return stored
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      id: m.id,
+      parts: (m.parts ?? [{ type: "text" as const, text: m.content }]) as UIMessage["parts"],
+      role: m.role as "user" | "assistant",
+    }));
+}
+
+// –
+// Message
+// –
 type ToolPart = DynamicToolUIPart | ToolUIPart;
 
 function MessageBubble({ message }: { message: UIMessage }) {
@@ -337,8 +358,10 @@ function MessageBubble({ message }: { message: UIMessage }) {
 
 const toolLabels: Record<string, { active: string; done: string }> = {
   expand:          { active: "Expanding summary",   done: "Expanded summary" },
+  http_get:        { active: "Fetching URL",        done: "Fetched URL" },
   list_documents:  { active: "Listing documents",   done: "Listed documents" },
   list_threads:    { active: "Listing threads",     done: "Listed threads" },
+  lookup_owner:    { active: "Looking up owner",    done: "Looked up owner" },
   read_document:   { active: "Reading document",    done: "Read document" },
   read_thread:     { active: "Reading thread",      done: "Read thread" },
   search_threads:  { active: "Searching threads",   done: "Searched threads" },

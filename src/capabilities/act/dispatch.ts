@@ -46,12 +46,12 @@ export async function persistOutput(
   const text = await result.text;
   const steps = await result.steps;
 
-  // Persist tool calls and their results.
+  // Persist tool calls and their results as separate rows (model context).
   for (const step of steps) {
     for (const call of step.toolCalls) {
       const c = call as Record<string, unknown>;
       await insertMessage({
-        content: JSON.stringify({ args: c.args, name: c.toolName }),
+        content: JSON.stringify({ input: c.input, name: c.toolName }),
         metadata: { toolCallId: c.toolCallId, toolName: c.toolName },
         role: "tool",
         threadId,
@@ -71,16 +71,52 @@ export async function persistOutput(
     }
   }
 
-  // Persist the assistant's text response.
-  if (text.length > 0) {
+  // Build parts array so the UI can render tool invocations after refresh.
+  const parts = buildParts(steps, text);
+
+  if (parts.length > 0) {
     await insertMessage({
       content: text,
+      parts,
       role: "assistant",
       threadId,
     });
   }
 
   return text;
+}
+
+/** Assemble UI-renderable parts from agent steps + final text. */
+function buildParts(
+  steps: Array<{ toolCalls: unknown[]; toolResults: unknown[] }>,
+  text: string,
+): unknown[] {
+  const parts: unknown[] = [];
+
+  for (const step of steps) {
+    const resultsByCallId = new Map(
+      (step.toolResults as Array<Record<string, unknown>>)
+        .map((r) => [r.toolCallId, r]),
+    );
+    for (const call of step.toolCalls) {
+      const c = call as Record<string, unknown>;
+      const r = resultsByCallId.get(c.toolCallId) as Record<string, unknown> | undefined;
+      parts.push({
+        input: c.input,
+        output: r?.result ?? null,
+        state: "output-available",
+        toolCallId: c.toolCallId,
+        toolName: c.toolName,
+        type: "dynamic-tool",
+      });
+    }
+  }
+
+  if (text.length > 0) {
+    parts.push({ text, type: "text" });
+  }
+
+  return parts;
 }
 
 // –

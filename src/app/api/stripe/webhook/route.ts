@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { seedOwnerContact } from "@/db/contacts";
 import { account, principal } from "@/db/schema";
 import { env } from "@/lib/env";
 import { centsToMicro, stripe } from "@/lib/stripe";
@@ -47,10 +48,21 @@ export async function POST(req: Request) {
     const username = session.metadata?.username;
     const name = session.metadata?.name;
     if (username && name) {
-      await db
+      const [inserted] = await db
         .insert(principal)
         .values({ accountId, name, username })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ id: principal.id });
+
+      // Seed owner contact — mirrors funded route, idempotent via onConflictDoNothing.
+      if (inserted) {
+        const [acc] = await db
+          .select({ email: account.email, name: account.name })
+          .from(account)
+          .where(eq(account.id, accountId))
+          .limit(1);
+        if (acc) await seedOwnerContact(inserted.id, acc.email, acc.name);
+      }
     }
   }
 
