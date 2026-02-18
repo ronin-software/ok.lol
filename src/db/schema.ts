@@ -25,7 +25,10 @@ export const account = pgTable("account", {
   stripeConnectId: text("stripe_connect_id"),
   /** Stripe Customer ID for saved payment methods. */
   stripeCustomerId: text("stripe_customer_id"),
-});
+}, (t) => [
+  // Webhook updates by connect ID: UPDATE ... WHERE stripe_connect_id = ?
+  index("account_stripe_connect_idx").on(t.stripeConnectId),
+]);
 
 // –
 // Principal
@@ -42,7 +45,10 @@ export const principal = pgTable("principal", {
   name: text("name").notNull(),
   /** Unique handle; doubles as the principal's email local-part. */
   username: text("username").notNull().unique(),
-});
+}, (t) => [
+  // Ownership checks: WHERE account_id = ? (does this account have a pal?)
+  index("principal_account_idx").on(t.accountId),
+]);
 
 // –
 // Document
@@ -69,7 +75,10 @@ export const document = pgTable("document", {
   principalId: uuid("principal_id")
     .references(() => principal.id)
     .notNull(),
-});
+}, (t) => [
+  // All reads filter by principalId+path, ordered by createdAt DESC (latest version per path).
+  index("document_principal_path_idx").on(t.principalId, t.path, t.createdAt),
+]);
 
 // –
 // Log
@@ -117,6 +126,8 @@ export const listing = pgTable("listing", {
 // Hire
 // –
 
+export const hireStatusEnum = pgEnum("hire_status", ["escrowed", "settled", "refunded"]);
+
 /** An instance of a principal invoking a listing. Lifecycle: escrowed -> settled | refunded. */
 export const hire = pgTable("hire", {
   callerId: uuid("caller_id")
@@ -135,16 +146,21 @@ export const hire = pgTable("hire", {
   rating: integer("rating"),
   settledAt: timestamp("settled_at"),
   /** escrowed -> settled | refunded */
-  status: text("status").notNull().default("escrowed"),
+  status: hireStatusEnum("status").notNull().default("escrowed"),
   /** Caller-approved usage budget in micro-USD. Defaults to listing.usageBudget. */
   usageBudget: bigint("usage_budget", { mode: "bigint" }),
-});
+}, (t) => [
+  // Listing all hires made by a caller, or all hires for a listing.
+  index("hire_caller_idx").on(t.callerId),
+  index("hire_listing_idx").on(t.listingId),
+]);
 
 // –
 // Thread
 // –
 
 export const channelEnum = pgEnum("channel", ["chat", "email"]);
+
 
 /** A conversation group. Chat sessions and email threads are both threads. */
 export const thread = pgTable("thread", {
@@ -156,7 +172,10 @@ export const thread = pgTable("thread", {
     .notNull(),
   /** LLM-generated for chat, email subject for email, user-overridable. */
   title: text("title"),
-});
+}, (t) => [
+  // recentThreads (principalId [+ channel]) and findEmailThread (principalId + channel [+ title]).
+  index("thread_principal_channel_idx").on(t.principalId, t.channel),
+]);
 
 // –
 // Message
@@ -198,6 +217,8 @@ export const message = pgTable("message", {
 // Payout
 // –
 
+export const payoutStatusEnum = pgEnum("payout_status", ["reserved", "transferred", "completed", "failed"]);
+
 /** Payout saga coordination log. Tracks state across TigerBeetle and Stripe. */
 export const payout = pgTable("payout", {
   accountId: text("account_id")
@@ -212,11 +233,14 @@ export const payout = pgTable("payout", {
   /** TigerBeetle pending transfer ID (u128 as text). */
   pendingTransferId: text("pending_transfer_id"),
   /** reserved → transferred → completed | failed */
-  status: text("status").notNull().default("reserved"),
+  status: payoutStatusEnum("status").notNull().default("reserved"),
   /** Stripe Transfer ID for the net payout. */
   stripeTransferId: text("stripe_transfer_id"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => [
+  // Payout history per account.
+  index("payout_account_idx").on(t.accountId),
+]);
 
 // –
 // Usage
@@ -237,7 +261,11 @@ export const usage = pgTable("usage", {
   id: uuid("id").primaryKey().defaultRandom(),
   /** Payable resource key (e.g. "resend:send", "model-provider/model-name:input") */
   resource: text("resource").notNull(),
-});
+}, (t) => [
+  // Billing summaries by account, and settlement reimbursement by hire.
+  index("usage_account_created_idx").on(t.accountId, t.createdAt),
+  index("usage_hire_idx").on(t.hireId),
+]);
 
 // –
 // Worker
@@ -256,4 +284,7 @@ export const worker = pgTable("worker", {
   secret: text("secret").notNull(),
   /** HTTP endpoint reachable from the origin (auto-populated). */
   url: text("url").notNull(),
-});
+}, (t) => [
+  // discover() and probeWorkers() are in the hot path of every act() call.
+  index("worker_account_idx").on(t.accountId),
+]);

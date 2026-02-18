@@ -9,7 +9,7 @@ import { db } from "@/db";
 import { document } from "@/db/schema";
 import { assert } from "@/lib/assert";
 import type { Capability } from "@ok.lol/capability";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { OriginExecutionContext } from "../_execution-context";
 
@@ -29,22 +29,15 @@ type ListOutput = z.infer<typeof listOutput>;
 export const listDocuments: Capability<OriginExecutionContext, ListInput, ListOutput> = {
   available: async () => true,
   async call(ectx) {
-    const rows = await db
-      .select({ path: document.path })
-      .from(document)
-      .where(eq(document.principalId, ectx.principal.id))
-      .orderBy(desc(document.createdAt));
+    // DISTINCT ON picks the latest row per path without fetching all versions.
+    const rows = await db.execute<{ path: string }>(sql`
+      SELECT DISTINCT ON (path) path
+      FROM document
+      WHERE principal_id = ${ectx.principal.id}
+      ORDER BY path, created_at DESC
+    `);
 
-    // Deduplicate to latest per path (query is ordered by createdAt desc).
-    const seen = new Set<string>();
-    const paths: string[] = [];
-    for (const row of rows) {
-      if (seen.has(row.path)) continue;
-      seen.add(row.path);
-      paths.push(row.path);
-    }
-
-    return { paths };
+    return { paths: rows.map((r) => r.path) };
   },
   setup: async () => {},
 

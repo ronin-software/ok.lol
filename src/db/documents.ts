@@ -6,36 +6,41 @@
  */
 
 import type { Document } from "@/capabilities/_execution-context";
-import { desc, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from ".";
-import { document } from "./schema";
+
+// Raw snake_case row returned by the DISTINCT ON query below.
+type DocumentRow = {
+  content: string;
+  created_at: string;
+  edited_by: "principal" | "user";
+  path: string;
+  priority: number;
+};
 
 /**
  * Fetch the current (latest version per path) documents for a principal.
- * Returns documents sorted by createdAt descending (newest first).
+ *
+ * Uses DISTINCT ON (path) ordered by (path, created_at DESC) so Postgres
+ * picks one row per path — the newest — without fetching all versions.
+ * The document_principal_path_idx covers this exactly.
  */
 export async function currentDocuments(
   principalId: string,
 ): Promise<Document[]> {
-  const rows = await db
-    .select()
-    .from(document)
-    .where(eq(document.principalId, principalId))
-    .orderBy(desc(document.createdAt));
+  const rows = await db.execute<DocumentRow>(sql`
+    SELECT DISTINCT ON (path)
+      id, principal_id, path, content, priority, edited_by, created_at
+    FROM document
+    WHERE principal_id = ${principalId}
+    ORDER BY path, created_at DESC
+  `);
 
-  // Deduplicate to latest version per path.
-  const seen = new Set<string>();
-  const current = rows.filter((d) => {
-    if (seen.has(d.path)) return false;
-    seen.add(d.path);
-    return true;
-  });
-
-  return current.map((d) => ({
+  return rows.map((d) => ({
     contents: d.content,
     path: d.path,
     priority: d.priority,
-    updatedAt: d.createdAt.toISOString(),
-    updatedBy: d.editedBy,
+    updatedAt: new Date(d.created_at as string).toISOString(),
+    updatedBy: d.edited_by as Document["updatedBy"],
   }));
 }

@@ -5,7 +5,7 @@
  * filter by principalId to enforce ownership at the data layer.
  */
 
-import { and, asc, desc, eq, ilike, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { db } from ".";
 import { message, thread } from "./schema";
 
@@ -217,21 +217,19 @@ export async function findEmailThread(
   references: string[],
   normalizedSubject: string,
 ): Promise<string | null> {
-  // Try matching by email message-id in metadata.
+  // Try matching any of the references in a single query.
   if (references.length > 0) {
-    for (const ref of references) {
-      const [match] = await db
-        .select({ threadId: message.threadId })
-        .from(message)
-        .innerJoin(thread, eq(message.threadId, thread.id))
-        .where(and(
-          eq(thread.principalId, principalId),
-          eq(thread.channel, "email"),
-          sql`${message.metadata}->>'messageId' = ${ref}`,
-        ))
-        .limit(1);
-      if (match) return match.threadId;
-    }
+    const [match] = await db
+      .select({ threadId: message.threadId })
+      .from(message)
+      .innerJoin(thread, eq(message.threadId, thread.id))
+      .where(and(
+        eq(thread.principalId, principalId),
+        eq(thread.channel, "email"),
+        inArray(sql`${message.metadata}->>'messageId'`, references),
+      ))
+      .limit(1);
+    if (match) return match.threadId;
   }
 
   // Fallback: match by normalized subject.
