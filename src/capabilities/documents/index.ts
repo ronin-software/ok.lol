@@ -8,11 +8,11 @@
 import { db } from "@/db";
 import { document } from "@/db/schema";
 import { assert } from "@/lib/assert";
-import { embedTexts } from "@/lib/relevance";
+import { embedActivation } from "@/lib/relevance";
 import type { Capability } from "@ok.lol/capability";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Activation, OriginExecutionContext } from "../context";
+import type { OriginExecutionContext } from "../context";
 
 // –
 // List
@@ -121,26 +121,6 @@ const writeOutput = z.object({
 
 type WriteInput = z.infer<typeof writeInput>;
 type WriteOutput = z.infer<typeof writeOutput>;
-
-/** Embed activation phrases and return the full Activation object with embeddings. */
-async function embedActivation(
-  input: { negative?: string[]; positive?: string[] },
-): Promise<Activation> {
-  const pos = (input.positive ?? []).filter(Boolean);
-  const neg = (input.negative ?? []).filter(Boolean);
-  const all = [...pos, ...neg];
-  if (all.length === 0) return { negative: input.negative, positive: input.positive };
-
-  const vecs = await embedTexts(all);
-  return {
-    embeddings: {
-      negative: vecs.slice(pos.length),
-      positive: vecs.slice(0, pos.length),
-    },
-    negative: input.negative,
-    positive: input.positive,
-  };
-}
 
 /** Write or update a document. Inserts a new version (append-only). */
 export const documentWrite: Capability<OriginExecutionContext, WriteInput, WriteOutput> = {

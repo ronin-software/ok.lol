@@ -1,20 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import type { ActivationInput } from "./actions";
 import { saveDocument } from "./actions";
-import { BUTTON_OUTLINE, BUTTON_PRIMARY, CARD, INPUT, LABEL } from "./styles";
+import { BUTTON_PRIMARY, CARD, INPUT, LABEL } from "./styles";
 
 /** Resolved document passed from the server component. */
 export interface DocumentData {
+  /** Relevance filtering phrases (no embeddings). */
+  activation?: { negative?: string[]; positive?: string[] };
   /** Document body. */
   content: string;
   /** True when using a system default (not yet saved by user). */
   isDefault: boolean;
   /** Hierarchical document path. */
   path: string;
-  /** Injection priority. */
+  /** Injection priority (lower = earlier). */
   priority: number;
+  /** ISO timestamp of last edit. Absent on defaults. */
+  updatedAt?: string;
+  /** Who created the current version. Absent on defaults. */
+  updatedBy?: "principal" | "user";
 }
 
 /** Props for the documents section. */
@@ -23,7 +31,7 @@ interface Props {
   principalId: string;
 }
 
-/** Renders all document editors for the pal's documents. */
+/** Renders the document list with links to detail pages. */
 export default function DocumentsSection({ documents, principalId }: Props) {
   return (
     <div className="mt-8">
@@ -34,114 +42,65 @@ export default function DocumentsSection({ documents, principalId }: Props) {
         These shape your pal&apos;s personality and memory. Edits create new
         versions — nothing is lost.
       </p>
-      {documents.map((doc) => (
-        <DocumentCard
-          key={doc.path}
-          doc={doc}
-          principalId={principalId}
-        />
-      ))}
+      <div className="mt-4 space-y-2">
+        {documents.map((doc) => (
+          <DocumentLink key={doc.path} doc={doc} />
+        ))}
+      </div>
       <NewDocumentCard principalId={principalId} />
     </div>
   );
 }
 
 // –
-// Card
+// Link card
 // –
 
-function DocumentCard({
-  doc,
-  principalId,
-}: {
-  doc: DocumentData;
-  principalId: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [content, setContent] = useState(doc.content);
-  const [baseline, setBaseline] = useState(doc.content);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const dirty = content !== baseline;
-
-  function handleSave() {
-    setError("");
-    setSaved(false);
-    startTransition(async () => {
-      const result = await saveDocument(
-        principalId,
-        doc.path,
-        content,
-        doc.priority,
-      );
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSaved(true);
-        setBaseline(content);
-      }
-    });
-  }
-
+function DocumentLink({ doc }: { doc: DocumentData }) {
   return (
-    <div className={CARD}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <div>
-          <p className="text-sm font-medium text-white">{doc.path}</p>
-          {doc.isDefault && (
-            <p className="text-xs text-zinc-500">default — not yet customized</p>
-          )}
-        </div>
-        <span className="text-xs text-zinc-500">
-          {expanded ? "collapse" : "edit"}
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="mt-4 space-y-3">
-          <textarea
-            value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              setSaved(false);
-            }}
-            rows={12}
-            className={[
-              "w-full rounded-lg border border-zinc-800 bg-zinc-950",
-              "p-3 font-mono text-sm text-zinc-300",
-              "placeholder-zinc-600 outline-none",
-              "focus:border-zinc-600 transition-colors resize-y",
-            ].join(" ")}
-          />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={!dirty || pending}
-              className={BUTTON_OUTLINE}
-            >
-              {pending ? "Saving..." : "Save"}
-            </button>
-            {saved && (
-              <span className="text-xs text-green-400">Saved</span>
-            )}
-            {error && (
-              <span className="text-xs text-red-400">{error}</span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <Link
+      href={`/dashboard/documents/${encodeURIComponent(doc.path)}`}
+      className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 transition-colors hover:border-zinc-700 hover:bg-zinc-800"
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-white">{doc.path}</span>
+        <span className="text-xs text-zinc-600">{doc.priority}</span>
+        {doc.activation && (
+          <span className="text-xs text-zinc-600">conditional</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {doc.updatedAt && (
+          <span className="text-xs text-zinc-600">
+            {timeago(doc.updatedAt)} by{" "}
+            {doc.updatedBy === "user" ? "you" : "pal"}
+          </span>
+        )}
+        {doc.isDefault && (
+          <span className="text-xs text-zinc-500">default</span>
+        )}
+      </div>
+    </Link>
   );
 }
 
 // –
-// New document
+// Helpers
 // –
+
+function timeago(iso: string): string {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
+}
 
 const TEXTAREA = [
   "w-full rounded-lg border border-zinc-800 bg-zinc-950",
@@ -150,22 +109,49 @@ const TEXTAREA = [
   "focus:border-zinc-600 transition-colors resize-y",
 ].join(" ");
 
+const HINT = "text-xs text-zinc-600";
+
+function parsePhrases(text: string): string[] {
+  return text.split("\n").map((s) => s.trim()).filter(Boolean);
+}
+
+function buildActivation(
+  positive: string,
+  negative: string,
+): ActivationInput | undefined {
+  const pos = parsePhrases(positive);
+  const neg = parsePhrases(negative);
+  if (!pos.length && !neg.length) return undefined;
+  return {
+    ...(neg.length ? { negative: neg } : {}),
+    ...(pos.length ? { positive: pos } : {}),
+  };
+}
+
+// –
+// New document
+// –
+
 function NewDocumentCard({ principalId }: { principalId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [path, setPath] = useState("");
-  const [priority, setPriority] = useState("0");
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
+  const [negative, setNegative] = useState("");
+  const [path, setPath] = useState("");
   const [pending, startTransition] = useTransition();
+  const [positive, setPositive] = useState("");
+  const [priority, setPriority] = useState("0");
 
   const valid = path.trim().length > 0 && content.trim().length > 0;
 
   function reset() {
-    setPath("");
-    setPriority("0");
     setContent("");
     setError("");
+    setNegative("");
+    setPath("");
+    setPositive("");
+    setPriority("0");
   }
 
   function handleCreate() {
@@ -176,13 +162,14 @@ function NewDocumentCard({ principalId }: { principalId: string }) {
         path.trim(),
         content,
         Number(priority) || 0,
+        buildActivation(positive, negative),
       );
       if (result.error) {
         setError(result.error);
       } else {
         reset();
         setOpen(false);
-        router.refresh();
+        router.push(`/dashboard/documents/${encodeURIComponent(path.trim())}`);
       }
     });
   }
@@ -201,7 +188,6 @@ function NewDocumentCard({ principalId }: { principalId: string }) {
             </button>
           </div>
 
-          {/* Path + priority on one row */}
           <div className="flex gap-3">
             <div className="flex-1">
               <label className={LABEL}>Path</label>
@@ -233,6 +219,34 @@ function NewDocumentCard({ principalId }: { principalId: string }) {
               rows={8}
               className={`mt-1 ${TEXTAREA}`}
             />
+          </div>
+
+          {/* Activation */}
+          <div>
+            <label className={LABEL}>Activation</label>
+            <div className="mt-1 flex gap-3">
+              <div className="flex-1">
+                <label className={HINT}>Inject when</label>
+                <textarea
+                  value={positive}
+                  onChange={(e) => setPositive(e.target.value)}
+                  placeholder="one phrase per line"
+                  rows={3}
+                  className={`mt-1 ${TEXTAREA}`}
+                />
+              </div>
+              <div className="flex-1">
+                <label className={HINT}>Suppress when</label>
+                <textarea
+                  value={negative}
+                  onChange={(e) => setNegative(e.target.value)}
+                  placeholder="one phrase per line"
+                  rows={3}
+                  className={`mt-1 ${TEXTAREA}`}
+                />
+              </div>
+            </div>
+            <p className={`mt-1 ${HINT}`}>Leave empty to always inject</p>
           </div>
 
           <div className="flex items-center gap-3">

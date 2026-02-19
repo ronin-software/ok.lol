@@ -2,19 +2,30 @@
 
 import { db } from "@/db";
 import { contact, document, principal, worker } from "@/db/schema";
+import { embedActivation } from "@/lib/relevance";
 import { verify } from "@/lib/session";
 import { probe } from "@/lib/tunnel";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
+
+/** Phrases for relevance-based injection filtering. */
+export type ActivationInput = {
+  /** Phrases for when this doc should NOT inject. */
+  negative?: string[];
+  /** Phrases for when this doc should inject. */
+  positive?: string[];
+};
 
 /**
  * Save a document for the current user's pal.
  * Inserts a new version (append-only) with `editedBy: "user"`.
+ * Embeds activation phrases when provided.
  */
 export async function saveDocument(
   principalId: string,
   path: string,
   content: string,
   priority: number,
+  activation?: ActivationInput,
 ): Promise<{ error?: string; ok?: boolean }> {
   const accountId = await verify();
   if (!accountId) return { error: "Unauthorized" };
@@ -26,7 +37,13 @@ export async function saveDocument(
     .then((rows) => rows[0]);
   if (!pal || pal.accountId !== accountId) return { error: "Forbidden" };
 
+  const hasActivation =
+    (activation?.positive?.length ?? 0) > 0 ||
+    (activation?.negative?.length ?? 0) > 0;
+  const embedded = hasActivation ? await embedActivation(activation!) : null;
+
   await db.insert(document).values({
+    ...(embedded ? { activation: embedded } : {}),
     content,
     editedBy: "user",
     path,
@@ -35,6 +52,54 @@ export async function saveDocument(
   });
 
   return { ok: true };
+}
+
+/** A single historical version of a document. */
+export interface Version {
+  /** Document body at this version. */
+  content: string;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** Who created this version. */
+  editedBy: "principal" | "user";
+}
+
+/** Fetch recent versions of a document (newest first, max 20). */
+export async function getDocumentHistory(
+  principalId: string,
+  path: string,
+): Promise<Version[]> {
+  const accountId = await verify();
+  if (!accountId) return [];
+
+  const pal = await db
+    .select({ accountId: principal.accountId })
+    .from(principal)
+    .where(eq(principal.id, principalId))
+    .then((rows) => rows[0]);
+  if (!pal || pal.accountId !== accountId) return [];
+
+  const rows = await db
+    .select({
+      content: document.content,
+      createdAt: document.createdAt,
+      editedBy: document.editedBy,
+    })
+    .from(document)
+    .where(
+      and(
+        eq(document.principalId, principalId),
+        eq(document.path, path),
+      ),
+    )
+    .orderBy(desc(document.createdAt))
+    .limit(20);
+
+  return rows.map((r) => ({
+    content: r.content,
+    createdAt: r.createdAt.toISOString(),
+    editedBy: r.editedBy,
+  }));
 }
 
 // –

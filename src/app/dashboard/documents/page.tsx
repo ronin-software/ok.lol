@@ -27,9 +27,15 @@ async function resolveDocuments(principalId: string): Promise<DocumentData[]> {
   return merged
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
     .map((d) => ({
+      // Strip embeddings — only pass phrase lists to the client.
+      activation: d.activation
+        ? { negative: d.activation.negative, positive: d.activation.positive }
+        : undefined,
       content: d.contents,
       isDefault: d.default ?? false,
       path: d.path,
       priority: d.priority ?? 0,
+      updatedAt: d.updatedAt,
+      updatedBy: d.updatedBy,
     }));
 }

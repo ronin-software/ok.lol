@@ -105,6 +105,26 @@ export async function ensureEmbeddings(
   return { ...activation, embeddings };
 }
 
+/** Embed activation phrases and return the full Activation with pre-computed vectors. */
+export async function embedActivation(
+  input: { negative?: string[]; positive?: string[] },
+): Promise<Activation> {
+  const pos = (input.positive ?? []).filter(Boolean);
+  const neg = (input.negative ?? []).filter(Boolean);
+  const all = [...pos, ...neg];
+  if (all.length === 0) return { negative: input.negative, positive: input.positive };
+
+  const vecs = await embedTexts(all);
+  return {
+    embeddings: {
+      negative: vecs.slice(pos.length),
+      positive: vecs.slice(0, pos.length),
+    },
+    negative: input.negative,
+    positive: input.positive,
+  };
+}
+
 // –
 // Filtering
 // –

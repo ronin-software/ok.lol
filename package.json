@@ -35,6 +35,7 @@
     "@ok.lol/capability": "workspace:*",
     "@sentry/nextjs": "^10",
     "ai": "^6.0.86",
+    "diff": "^8.0.3",
     "drizzle-orm": "catalog:",
     "jose": "^6.1.3",
     "next": "16.1.6",
