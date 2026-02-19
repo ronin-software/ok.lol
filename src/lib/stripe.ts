@@ -24,17 +24,34 @@ export function microToCents(micro: bigint): number {
   return Number(micro / MICRO_PER_CENT);
 }
 
-/** Default auto-top-up threshold in micro-USD ($1). */
-export const TOPUP_THRESHOLD_MICRO = 1_000_000n;
+// –
+// Payment Methods
+// –
 
-/** Default auto-top-up amount in cents ($10). */
-export const TOPUP_AMOUNT_CENTS = 1000;
+/** Summary of a saved payment method for display. */
+export type CardSummary = {
+  /** Card brand (e.g. "visa", "mastercard"). */
+  brand: string;
+  /** Last four digits. */
+  last4: string;
+};
 
-// Threshold must equal the cent conversion.
-assert(
-  TOPUP_THRESHOLD_MICRO === centsToMicro(100),
-  "TOPUP_THRESHOLD_MICRO must equal $1 in micro-USD",
-);
+/** Retrieve the customer's saved card summary, or null if none on file. */
+export async function getCardSummary(
+  customerId: string,
+): Promise<CardSummary | null> {
+  assert(customerId.length > 0, "customerId must not be empty");
+
+  const methods = await stripe.paymentMethods.list({
+    customer: customerId,
+    limit: 1,
+    type: "card",
+  });
+  const card = methods.data[0]?.card;
+  if (!card) return null;
+
+  return { brand: card.brand, last4: card.last4 };
+}
 
 // –
 // Customers
@@ -101,6 +118,21 @@ export async function createCheckoutSession(opts: {
     },
     mode: "payment",
     payment_intent_data: { setup_future_usage: "off_session" },
+    payment_method_types: ["card"],
+    success_url: opts.successUrl,
+  });
+}
+
+/** Create a setup-only Checkout Session for updating the saved card. */
+export async function createSetupSession(opts: {
+  customerId: string;
+  successUrl: string;
+}) {
+  assert(opts.customerId.length > 0, "customerId must not be empty");
+  assert(opts.successUrl.length > 0, "successUrl must not be empty");
+  return stripe.checkout.sessions.create({
+    customer: opts.customerId,
+    mode: "setup",
     payment_method_types: ["card"],
     success_url: opts.successUrl,
   });

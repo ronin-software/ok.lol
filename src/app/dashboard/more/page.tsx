@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { log, usage as usageTable } from "@/db/schema";
+import { getCardSummary } from "@/lib/stripe";
 import * as tb from "@/lib/tigerbeetle";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -7,6 +8,7 @@ import Link from "next/link";
 import ActivityTable, { type ActivityEntry } from "../activity";
 import { requirePrincipal } from "../auth";
 import BalanceCard from "../balance-card";
+import BillingCard from "../billing-card";
 import FundedBanner from "../funded-banner";
 import PayoutCard from "../payout-card";
 import { BUTTON_PRIMARY, CARD, INPUT, LABEL } from "../styles";
@@ -15,9 +17,17 @@ import { updatePalName } from "./actions";
 const PREVIEW = 5;
 
 export default async function MorePage() {
-  const { accountId, pal, stripeConnectId } = await requirePrincipal();
+  const {
+    accountId,
+    autoReloadTarget,
+    autoReloadThreshold,
+    monthlySpendLimit,
+    pal,
+    stripeConnectId,
+    stripeCustomerId,
+  } = await requirePrincipal();
 
-  const [tbAcct, logRows, usageRows, jar] = await Promise.all([
+  const [tbAcct, logRows, usageRows, jar, card] = await Promise.all([
     tb.lookupAccount(BigInt(accountId)),
     db
       .select({ capability: log.capability, createdAt: log.createdAt, input: log.input })
@@ -32,6 +42,7 @@ export default async function MorePage() {
       .orderBy(desc(usageTable.createdAt))
       .limit(PREVIEW),
     cookies(),
+    stripeCustomerId ? getCardSummary(stripeCustomerId) : Promise.resolve(null),
   ]);
 
   const balance = tbAcct ? Number(tb.available(tbAcct)) : 0;
@@ -67,6 +78,12 @@ export default async function MorePage() {
       </div>
 
       <BalanceCard balance={balance} />
+      <BillingCard
+        card={card}
+        threshold={Number(autoReloadThreshold) / 1_000_000}
+        target={Number(autoReloadTarget) / 1_000_000}
+        limit={Number(monthlySpendLimit) / 1_000_000}
+      />
       <PayoutCard enabled={stripeConnectId != null} />
 
       {/* Integrations stub */}

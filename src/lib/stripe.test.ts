@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { centsToMicro, FEE_BPS_PAYOUT, microToCents, payoutFee, TOPUP_AMOUNT_CENTS, TOPUP_THRESHOLD_MICRO } from "./stripe";
+import { centsToMicro, FEE_BPS_PAYOUT, microToCents, payoutFee } from "./stripe";
 
 // –
 // centsToMicro
@@ -73,17 +73,5 @@ describe("payoutFee", () => {
 describe("constants", () => {
   test("payout fee is 1% (100 bps)", () => {
     expect(FEE_BPS_PAYOUT).toBe(100n);
-  });
-
-  test("top-up threshold is $1", () => {
-    expect(TOPUP_THRESHOLD_MICRO).toBe(1_000_000n);
-  });
-
-  test("top-up amount is $10 (1000 cents)", () => {
-    expect(TOPUP_AMOUNT_CENTS).toBe(1000);
-  });
-
-  test("threshold equals conversion of 100 cents", () => {
-    expect(TOPUP_THRESHOLD_MICRO).toBe(centsToMicro(100));
   });
 });

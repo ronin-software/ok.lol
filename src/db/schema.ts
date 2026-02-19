@@ -16,10 +16,16 @@ import {
  * The primary key is the TigerBeetle account ID (u128 as text).
  */
 export const account = pgTable("account", {
+  /** Balance level to reload back to, in micro-USD. */
+  autoReloadTarget: bigint("auto_reload_target", { mode: "bigint" }).notNull().default(20_000_000n),
+  /** Balance below which auto-reload triggers, in micro-USD. */
+  autoReloadThreshold: bigint("auto_reload_threshold", { mode: "bigint" }).notNull().default(5_000_000n),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   email: text("email").notNull().unique(),
   /** TigerBeetle account ID (u128, stored as text). */
   id: text("id").primaryKey(),
+  /** Max total usage per calendar month in micro-USD. */
+  monthlySpendLimit: bigint("monthly_spend_limit", { mode: "bigint" }).notNull().default(200_000_000n),
   name: text("name"),
   /** Stripe Connect account ID. Non-null when payouts are enabled. */
   stripeConnectId: text("stripe_connect_id"),

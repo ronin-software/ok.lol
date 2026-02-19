@@ -1,8 +1,10 @@
 import { findOwnerContact } from "@/db/contacts";
 import { createThread, findEmailThread, insertMessage } from "@/db/threads";
 import { assert } from "@/lib/assert";
+import { recordUsage } from "@/lib/billing";
 import { env } from "@/lib/env";
 import { normalizeSubject } from "@/lib/email";
+import { computeCost } from "@/lib/pricing";
 import type { Capability } from "@ok.lol/capability";
 import { Resend, type CreateEmailOptions } from "resend";
 import { z } from "zod";
@@ -46,6 +48,14 @@ const emailSend: Capability<OriginExecutionContext, Input, void> = {
     // Strip non-Resend fields before sending.
     const { threadId, to: _to, ...rest } = email;
     const { data } = await resend.emails.send({ ...rest, from, to: toAddress } as CreateEmailOptions);
+
+    await recordUsage({
+      accountId: ectx.principal.accountId,
+      amount: 1n,
+      cost: computeCost("resend:send", 1n),
+      hireId: ectx.caller?.hireId,
+      resource: "resend:send",
+    });
 
     const meta = {
       cc: email.cc,

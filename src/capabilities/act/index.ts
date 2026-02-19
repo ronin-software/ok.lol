@@ -1,5 +1,5 @@
 import { assert } from "@/lib/assert";
-import { dollarsToMicro, recordUsage } from "@/lib/billing";
+import { dollarsToMicro, ensureFunded, recordUsage } from "@/lib/billing";
 import { env } from "@/lib/env";
 import { gateway } from "@/lib/gateway";
 import { embedText, filterDocuments } from "@/lib/relevance";
@@ -53,6 +53,10 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
     input.prompt != null || input.messages != null,
     "prompt or messages required",
   );
+
+  // Gate: reject if the account can't fund billable work.
+  await ensureFunded(ectx.principal.accountId);
+
   await logCall(ectx, "act", input);
   const modelId = input.model ?? DEFAULT_MODEL;
 

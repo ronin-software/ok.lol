@@ -15,8 +15,12 @@ export async function requireAccount() {
 
   const acct = await db
     .select({
+      autoReloadTarget: account.autoReloadTarget,
+      autoReloadThreshold: account.autoReloadThreshold,
       email: account.email,
+      monthlySpendLimit: account.monthlySpendLimit,
       stripeConnectId: account.stripeConnectId,
+      stripeCustomerId: account.stripeCustomerId,
     })
     .from(account)
     .where(eq(account.id, accountId))

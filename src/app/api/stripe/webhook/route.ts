@@ -28,24 +28,31 @@ export async function POST(req: Request) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
+
+    // Setup-mode sessions (card updates) carry no funding metadata — skip.
     const accountId = session.metadata?.accountId;
     const cents = Number(session.metadata?.cents ?? "0");
-    if (!accountId) return new Response("Missing accountId", { status: 400 });
-    if (!cents) return new Response("Missing cents", { status: 400 });
+    if (accountId && cents) {
+      await tb.bootstrap();
+      await tb.fund(BigInt(accountId), centsToMicro(cents));
 
-    await tb.bootstrap();
-    await tb.fund(BigInt(accountId), centsToMicro(cents));
-
-    const { username, name } = session.metadata ?? {};
-    if (username && name) await seedPrincipal(accountId, username, name);
+      const { username, name } = session.metadata ?? {};
+      if (username && name) await seedPrincipal(accountId, username, name);
+    }
   }
 
   if (event.type === "payment_intent.succeeded") {
+    // Auto-topup funds are credited inline by autoReload() at charge time.
+    // This handler is a safety net: if the inline credit failed, retry here.
     const intent = event.data.object;
     const accountId = intent.metadata?.accountId;
     if (intent.metadata?.auto_topup !== "true") return new Response("ok");
     if (!accountId) return new Response("ok");
-    await tb.fund(BigInt(accountId), centsToMicro(intent.amount ?? 0));
+    try {
+      await tb.fund(BigInt(accountId), centsToMicro(intent.amount ?? 0));
+    } catch {
+      // Already credited inline — duplicate funding rejected by the ledger.
+    }
   }
 
   if (event.type === "account.updated") {
