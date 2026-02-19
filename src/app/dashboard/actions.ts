@@ -5,7 +5,8 @@ import { contact, document, principal, worker } from "@/db/schema";
 import { embedActivation } from "@/lib/relevance";
 import { verify } from "@/lib/session";
 import { probe } from "@/lib/tunnel";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 
 /** Phrases for relevance-based injection filtering. */
 export type ActivationInput = {
@@ -51,6 +52,7 @@ export async function saveDocument(
     priority,
   });
 
+  revalidatePath("/dashboard/documents", "layout");
   return { ok: true };
 }
 
@@ -100,6 +102,42 @@ export async function getDocumentHistory(
     createdAt: r.createdAt.toISOString(),
     editedBy: r.editedBy,
   }));
+}
+
+/**
+ * Delete all versions of documents at `path` or under `path/` (directory).
+ * Verifies ownership. Returns the count of rows deleted.
+ */
+export async function deleteDocuments(
+  principalId: string,
+  path: string,
+): Promise<{ count?: number; error?: string }> {
+  const accountId = await verify();
+  if (!accountId) return { error: "Unauthorized" };
+
+  const pal = await db
+    .select({ accountId: principal.accountId })
+    .from(principal)
+    .where(eq(principal.id, principalId))
+    .then((rows) => rows[0]);
+  if (!pal || pal.accountId !== accountId) return { error: "Forbidden" };
+
+  // Match exact path OR any path under it as a directory.
+  const rows = await db
+    .delete(document)
+    .where(
+      and(
+        eq(document.principalId, principalId),
+        or(
+          eq(document.path, path),
+          like(document.path, `${path}/%`),
+        ),
+      ),
+    )
+    .returning({ id: document.id });
+
+  revalidatePath("/dashboard/documents", "layout");
+  return { count: rows.length };
 }
 
 // –

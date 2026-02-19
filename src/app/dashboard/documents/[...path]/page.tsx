@@ -1,11 +1,9 @@
 import { TOOL_NAMES, withDefaults } from "@/capabilities/documents/defaults";
-import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
-import { document } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { requirePrincipal } from "../../auth";
-import DocumentDetail from "../../document-detail";
+import Editor from "../editor";
+import { serialize, unpackExtra } from "../frontmatter";
 
 export default async function DocumentPage({
   params,
@@ -16,50 +14,26 @@ export default async function DocumentPage({
   const segments = (await params).path;
   const docPath = segments.join("/");
 
-  // Resolve document (merges user docs with system defaults).
   const toolSpecs = TOOL_NAMES.map((name) => ({ description: "", name }));
   const all = withDefaults(await currentDocuments(pal.id), toolSpecs);
   const doc = all.find((d) => d.path === docPath);
   if (!doc) notFound();
 
-  // Load version history from DB (empty for uncustomized defaults).
-  const versions = await db
-    .select({
-      content: document.content,
-      createdAt: document.createdAt,
-      editedBy: document.editedBy,
-    })
-    .from(document)
-    .where(
-      and(
-        eq(document.principalId, pal.id),
-        eq(document.path, docPath),
-      ),
-    )
-    .orderBy(desc(document.createdAt))
-    .limit(50);
+  const activation = doc.activation
+    ? { negative: doc.activation.negative, positive: doc.activation.positive }
+    : undefined;
+
+  const { body, extra } = unpackExtra(doc.contents);
+  const text = serialize(body, doc.priority ?? 0, activation, extra);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <DocumentDetail
-        activation={
-          doc.activation
-            ? { negative: doc.activation.negative, positive: doc.activation.positive }
-            : undefined
-        }
-        content={doc.contents}
-        isDefault={doc.default ?? false}
-        path={doc.path}
-        principalId={pal.id}
-        priority={doc.priority ?? 0}
-        updatedAt={doc.updatedAt}
-        updatedBy={doc.updatedBy}
-        versions={versions.map((v) => ({
-          content: v.content,
-          createdAt: v.createdAt.toISOString(),
-          editedBy: v.editedBy,
-        }))}
-      />
-    </div>
+    <Editor
+      isDefault={doc.default ?? false}
+      path={doc.path}
+      principalId={pal.id}
+      text={text}
+      updatedAt={doc.updatedAt}
+      updatedBy={doc.updatedBy}
+    />
   );
 }

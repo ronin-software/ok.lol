@@ -180,8 +180,8 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   }
 
   async function removeThread(id: string) {
+    if (!confirm("Delete this thread?")) return;
     await fetch(`/api/threads/${id}`, { method: "DELETE" });
-    // Clear active thread if it was deleted.
     if (threadId === id) {
       setThreadId(null);
       setMessages([]);
