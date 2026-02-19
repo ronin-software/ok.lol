@@ -1,6 +1,6 @@
 // Inline SVG icons. No external dependency.
 
-type IconName = "activity" | "chat" | "contacts" | "documents" | "settings" | "workers";
+type IconName = "activity" | "chat" | "contacts" | "documents" | "more" | "settings" | "workers";
 
 const ATTRS: React.SVGProps<SVGSVGElement> = {
   fill: "none",
@@ -28,6 +28,13 @@ const SHAPES: Record<IconName, React.ReactNode> = {
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
     </>
   ),
   settings: (

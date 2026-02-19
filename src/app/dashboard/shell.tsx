@@ -17,9 +17,8 @@ const NAV: NavItem[] = [
   { href: "/dashboard/chat", icon: "chat", label: "Chat" },
   { href: "/dashboard/contacts", icon: "contacts", label: "Contacts" },
   { href: "/dashboard/documents", icon: "documents", label: "Documents" },
-  { href: "/dashboard/activity", icon: "activity", label: "Activity" },
   { href: "/dashboard/workers", icon: "workers", label: "Workers" },
-  { href: "/dashboard/settings", icon: "settings", label: "Settings" },
+  { href: "/dashboard/more", icon: "more", label: "More" },
 ];
 
 // –
@@ -68,7 +67,10 @@ export default function Shell({ balance, children, domain, pal, payoutsEnabled }
               ].join(" ")}
             >
               <Icon className="h-4 w-4 shrink-0" name={item.icon} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.href === "/dashboard/more" && (
+                <CreditsBadge balance={balance} payoutsEnabled={payoutsEnabled} />
+              )}
             </Link>
           ))}
         </nav>
@@ -80,14 +82,8 @@ export default function Shell({ balance, children, domain, pal, payoutsEnabled }
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
-        <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 md:hidden">
+        <header className="flex items-center border-b border-zinc-800 px-4 py-3 md:hidden">
           <PalSwitcher compact domain={domain} pal={pal} />
-          <CreditsBadge balance={balance} payoutsEnabled={payoutsEnabled} />
-        </header>
-
-        {/* Desktop header */}
-        <header className="hidden items-center justify-end border-b border-zinc-800 px-6 py-3 md:flex">
-          <CreditsBadge balance={balance} payoutsEnabled={payoutsEnabled} />
         </header>
 
         {/* Content */}
@@ -106,8 +102,17 @@ export default function Shell({ balance, children, domain, pal, payoutsEnabled }
                 pathname.startsWith(item.href) ? "text-white" : "text-zinc-500",
               ].join(" ")}
             >
-              <Icon className="h-5 w-5" name={item.icon} />
-              <span className="text-[10px]">{item.label}</span>
+              {item.href === "/dashboard/more" ? (
+                <>
+                  <CreditsBadge balance={balance} payoutsEnabled={payoutsEnabled} />
+                  <span className="text-[10px] text-zinc-500">More</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[10px]">{item.label}</span>
+                  <Icon className="h-5 w-5" name={item.icon} />
+                </>
+              )}
             </Link>
           ))}
         </nav>

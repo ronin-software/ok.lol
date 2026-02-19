@@ -64,20 +64,9 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   const [threadId, setThreadId] = useState<string | null>(initialThreadId ?? null);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  // True once we know the viewport is wide (≥768px); starts false for SSR safety.
-  const [wide, setWide] = useState(false);
   const threadIdRef = useRef<string | null>(null);
   // Ref-backed so the stable transport closure can call the latest handlers.
   const onThreadIdRef = useRef<(id: string) => void>(() => {});
-
-  // Auto-open sidebar on wide viewports; close drawer when it becomes narrow.
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    setWide(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setWide(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
 
   // Keep refs in sync so transport closures always read the latest values.
   useEffect(() => { threadIdRef.current = threadId; }, [threadId]);
@@ -214,21 +203,22 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
 
   return (
     <div className="relative flex h-full overflow-hidden bg-background">
-      {/* Scrim — taps outside to close drawer on narrow viewports */}
-      {!wide && drawerOpen && (
+      {/* Scrim — taps outside to close drawer; hidden on wide viewports */}
+      {drawerOpen && (
         <div
-          className="absolute inset-0 z-10 bg-black/60"
+          className="absolute inset-0 z-10 bg-black/60 lg:hidden"
           onClick={() => setDrawerOpen(false)}
         />
       )}
 
-      {/* Sidebar — overlay on narrow, inline on wide */}
-      {(wide || drawerOpen) && (
-        <div className={[
-          "flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950",
-          wide ? "" : "absolute inset-y-0 left-0 z-20",
-        ].join(" ")}>
-          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+      {/* Sidebar — always rendered; overlay on narrow, inline on wide */}
+      <div className={[
+        "flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950",
+        drawerOpen
+          ? "absolute inset-y-0 left-0 z-20 lg:relative lg:inset-auto lg:z-auto"
+          : "hidden lg:flex",
+      ].join(" ")}>
+          <div className="flex h-12 items-center justify-between border-b border-zinc-800 px-4">
             <span className="text-xs font-medium text-zinc-400">Threads</span>
             <button
               type="button"
@@ -278,22 +268,19 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
             )}
           </div>
         </div>
-      )}
 
-      {/* Main chat area — min-w-0 so it shrinks correctly inside the flex row */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main chat area — relative so the composer can float above the scroll */}
+      <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-3">
+        <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-800 px-4">
           <div className="flex shrink-0 items-center gap-3">
-            {!wide && (
-              <button
-                type="button"
-                onClick={() => { setDrawerOpen(!drawerOpen); if (!drawerOpen) loadThreads(); }}
-                className="text-xs text-zinc-500 transition-colors hover:text-white"
-              >
-                {drawerOpen ? "Close" : "Threads"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => { setDrawerOpen(!drawerOpen); if (!drawerOpen) loadThreads(); }}
+              className="text-xs text-zinc-500 transition-colors hover:text-white lg:hidden"
+            >
+              {drawerOpen ? "Close" : "Threads"}
+            </button>
             <span className="text-xs font-medium text-zinc-400">Chat</span>
           </div>
           <h1 className="min-w-0 flex-1 truncate px-4 text-center text-sm font-medium">
@@ -304,7 +291,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
 
         {/* Messages */}
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
+          <div className="mx-auto w-full max-w-2xl space-y-6 px-4 pt-6 pb-16">
             {messages.length === 0 && (
               <p className="pt-24 text-center text-sm text-zinc-500">
                 Send a message to start chatting with your pal.
@@ -323,35 +310,43 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
           </div>
         </div>
 
-        {/* Input */}
-        <div className="shrink-0">
-          <div className="mx-auto flex w-full max-w-2xl items-end gap-2 px-4 py-3">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message your pal..."
-              rows={1}
-              className={[
-                "flex-1 resize-none bg-transparent px-1 py-2 text-sm text-white",
-                "placeholder-zinc-600 outline-none",
-                "max-h-32 overflow-y-auto",
-              ].join(" ")}
-              style={{ fieldSizing: "content" } as React.CSSProperties}
-            />
-            <button
-              type="button"
-              onClick={send}
-              disabled={streaming || input.trim().length === 0}
-              className={[
-                "shrink-0 rounded-lg bg-white px-3 py-1.5",
-                "text-sm font-medium text-black transition-colors",
-                "hover:bg-zinc-200 disabled:opacity-40",
-              ].join(" ")}
-            >
-              {streaming ? "..." : "Send"}
-            </button>
+        {/* Input — floats over scroll content */}
+        <div className="absolute inset-x-0 bottom-0 px-4 py-3">
+          <div className="mx-auto w-full max-w-2xl">
+            <div className={[
+              "flex items-baseline gap-2 rounded-xl border p-1",
+              "bg-zinc-900/70 backdrop-blur-md",
+              "border-zinc-700/60",
+              "shadow-[0_0_24px_-4px_rgba(255,255,255,0.06)]",
+              "transition-shadow focus-within:shadow-[0_0_32px_-4px_rgba(255,255,255,0.12)]",
+            ].join(" ")}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Message your pal..."
+                rows={1}
+                className={[
+                  "flex-1 resize-none bg-transparent px-1 py-0.5 text-sm text-white",
+                  "placeholder-zinc-600 outline-none",
+                  "max-h-32 overflow-y-auto",
+                ].join(" ")}
+                style={{ fieldSizing: "content" } as React.CSSProperties}
+              />
+              <button
+                type="button"
+                onClick={send}
+                disabled={streaming || input.trim().length === 0}
+                className={[
+                  "shrink-0 rounded-lg bg-white px-3 py-1.5",
+                  "text-sm font-medium text-black transition-colors",
+                  "hover:bg-zinc-200 disabled:opacity-40",
+                ].join(" ")}
+              >
+                {streaming ? "..." : "Send"}
+              </button>
+            </div>
           </div>
           <div className="h-[env(safe-area-inset-bottom)]" />
         </div>

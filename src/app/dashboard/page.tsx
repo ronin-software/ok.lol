@@ -20,5 +20,5 @@ export default async function DashboardPage() {
 
   // After Stripe checkout, show the updated balance.
   const jar = await cookies();
-  redirect(jar.has("funded") ? "/dashboard/settings" : "/dashboard/chat");
+  redirect(jar.has("funded") ? "/dashboard/more" : "/dashboard/chat");
 }
