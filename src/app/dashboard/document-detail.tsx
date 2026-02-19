@@ -252,7 +252,9 @@ function VersionHistory({ versions }: { versions: Version[] }) {
       <div className="mt-4 space-y-2">
         {versions.map((v, i) => {
           const isSelected = selected === i;
-          const previous = i < versions.length - 1 ? versions[i + 1].content : "";
+          const previous = i < versions.length - 1
+            ? versions?.[i + 1]?.content ?? ""
+            : "";
 
           return (
             <div key={v.createdAt}>
