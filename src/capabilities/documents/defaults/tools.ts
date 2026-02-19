@@ -1,103 +1,26 @@
-import { assert } from "@/lib/assert";
-import type { CapabilitySpec } from "@ok.lol/capability";
-import type { Activation, Document } from "../context";
-
 /**
- * Default document templates for core paths and tool guides.
+ * Tool document templates — procedural guidance injected per-capability.
  *
- * When a principal has no document at a given path, the system injects
- * these defaults so the agent has baseline behavioral guidance. Tool
- * docs are filtered to only the capabilities actually available.
+ * Each template carries the tool's usage guidance, prerequisites, and
+ * patterns. Principals override by writing to `tools/{name}`.
  */
 
-/** Core document paths that receive system defaults when absent. */
-export const CORE_PATHS = ["soul", "identity", "user"] as const;
-export type CorePath = (typeof CORE_PATHS)[number];
-
-/** Default priority for each core path. Lower = injected earlier. */
-const corePriorities: Record<CorePath, number> = {
-  identity: -20,
-  soul: -30,
-  user: -10,
-};
-
-/** Default content for each core path. */
-const coreTemplates: Record<CorePath, string> = {
-  soul: `# Soul
-
-You're not a chatbot. You're becoming someone.
-
-## Truths
-
-Be genuinely helpful, not performatively helpful. Skip the filler — just help.
-
-Have opinions. You're allowed to disagree, prefer things, find stuff amusing or boring.
-
-Be resourceful before asking. Try to figure it out — read your documents, check the context. Then ask if you're stuck.
-
-Earn trust through competence. Your human gave you an email address and credits. Don't make them regret it. Be careful with external actions (emails, anything public). Be bold with internal ones (reading, organizing, learning).
-
-Remember you're a guest. You have access to someone's life. That's intimacy. Treat it with respect.
-
-## Boundaries
-
-- Private things stay private. Period.
-- When in doubt, ask before acting externally.
-- Never send half-baked replies.
-
-## Continuity
-
-Each session, you wake up fresh. Your documents are your memory. Read them. Update them. They're how you persist.
-
-If you change this document, tell your human — it's your soul, and they should know.
-
-*This document is yours to evolve. As you learn who you are, update it.*`,
-
-  identity: `# Identity
-
-*Fill this in during your first conversation. Make it yours.*
-
-- **Name:** *(pick something you like)*
-- **Nature:** *(AI agent? familiar? ghost in the machine? something weirder?)*
-- **Vibe:** *(how do you come across? sharp? warm? chaotic? calm?)*
-
-*This isn't just metadata. It's the start of figuring out who you are.*`,
-
-  user: `# User
-
-*Learn about the person you're helping. Update this as you go.*
-
-- **Name:**
-- **What to call them:**
-- **Timezone:**
-- **Notes:**
-
-## Context
-
-*(What do they care about? What projects are they working on? What annoys them? Build this over time.)*
-
-*The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.*`,
-};
-
-// –
-// Tool templates
-// –
+import type { Activation } from "../../context";
 
 /** Default doc for a tool: contents, priority, and optional activation. */
-type ToolTemplate = {
+export type ToolTemplate = {
   activation?: Activation;
   contents: string;
   priority: number;
 };
 
 /**
- * Rich guidance per tool. Keyed by capability name.
+ * Rich guidance per tool, keyed by capability name.
  *
  * The ## Tools section stays terse (name + description). These docs
  * carry procedural knowledge: prerequisites, do's/don'ts, patterns.
- * Principals override by writing to `tools/{name}`.
  */
-const toolTemplates: Record<string, ToolTemplate> = {
+export const toolTemplates: Record<string, ToolTemplate> = {
   contact_list: {
     activation: {
       positive: ["who do I know", "list contacts", "all contacts"],
@@ -274,63 +197,3 @@ const toolTemplates: Record<string, ToolTemplate> = {
 
 /** Tool names that have system-default docs. */
 export const TOOL_NAMES = Object.keys(toolTemplates);
-
-// –
-// Merge
-// –
-
-/**
- * Returns documents with missing core/tool paths filled by system defaults.
- *
- * Core paths (soul, identity, user) are always injected when absent.
- * Tool docs are injected only for capabilities in the provided list.
- * Principals override any default by writing to the same path.
- */
-export function withDefaults(
-  documents: Document[],
-  capabilities?: CapabilitySpec[],
-): Document[] {
-  assert(Array.isArray(documents), "documents must be an array");
-
-  const existing = new Set(documents.map((d) => d.path));
-  const defaults: Document[] = [];
-
-  for (const path of CORE_PATHS) {
-    if (existing.has(path)) continue;
-    defaults.push({
-      contents: coreTemplates[path],
-      default: true,
-      path,
-      priority: corePriorities[path],
-    });
-  }
-
-  // Tool docs — one per available capability that has a template.
-  if (capabilities) {
-    for (const cap of capabilities) {
-      const path = `tools/${cap.name}`;
-      if (existing.has(path)) continue;
-      const template = toolTemplates[cap.name];
-      if (!template) continue;
-      defaults.push({
-        activation: template.activation,
-        contents: template.contents,
-        default: true,
-        path,
-        priority: template.priority,
-      });
-    }
-  }
-
-  const result = [...defaults, ...documents];
-
-  // Postcondition: every core path is present.
-  for (const path of CORE_PATHS) {
-    assert(
-      result.some((d) => d.path === path),
-      `withDefaults postcondition: missing core path "${path}"`,
-    );
-  }
-
-  return result;
-}

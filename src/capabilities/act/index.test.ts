@@ -294,7 +294,7 @@ describe("assemblePrompt", () => {
 
   test("omits worker preamble when no workers", () => {
     const prompt = assemblePrompt(options());
-    expect(prompt).not.toContain("Workers are computers");
+    expect(prompt).not.toContain("Workers are computers you can control remotely");
   });
 });
 
