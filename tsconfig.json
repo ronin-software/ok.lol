@@ -29,7 +29,7 @@
     "noPropertyAccessFromIndexSignature": false,
 
     // Next.js
-    "plugins": [{ "name": "next" }],
+    "plugins": [{ "name": "next" }, { "name": "workflow" }],
     "paths": { "@/*": ["./src/*"] }
   },
   "include": [

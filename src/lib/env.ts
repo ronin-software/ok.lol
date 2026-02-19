@@ -21,6 +21,10 @@ export const env = {
   get AI_GATEWAY_API_KEY() {
     return required("AI_GATEWAY_API_KEY");
   },
+  /** Shared secret for authenticating cron/heartbeat requests. */
+  get CRON_SECRET() {
+    return process.env.CRON_SECRET;
+  },
   /** Public-facing origin. */
   get BASE_URL() {
     return (

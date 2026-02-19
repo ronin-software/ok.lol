@@ -18,7 +18,7 @@ import {
   contactSearch,
 } from "../contacts";
 import type { OriginExecutionContext } from "../context";
-import { documentList, documentRead, documentWrite } from "../documents";
+import { documentDelete, documentList, documentRead, documentWrite } from "../documents";
 import emailSend from "../email/email.send";
 import httpGet from "../http";
 import { logCall } from "../log";
@@ -38,6 +38,7 @@ const ORIGIN_CAPABILITIES = [
   contactLookupOwner,
   contactRecord,
   contactSearch,
+  documentDelete,
   documentList,
   documentRead,
   documentWrite,

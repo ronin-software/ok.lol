@@ -2,8 +2,8 @@
  * Default document injection — merges system defaults into a principal's
  * document set so the agent always has baseline guidance.
  *
- * Core templates (soul, identity, user, guide) are always injected when
- * absent. Tool docs are injected only for capabilities in the provided list.
+ * Core templates are always injected when absent.
+ * Tool docs are injected only for capabilities in the provided list.
  */
 
 import { assert } from "@/lib/assert";

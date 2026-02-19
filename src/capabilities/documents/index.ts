@@ -1,8 +1,9 @@
 /**
- * Document capabilities — list, read, and write principal documents.
+ * Document capabilities — list, read, write, and delete principal documents.
  *
  * Each is a `Capability` that closes over the execution context at
- * call time. Append-only versioning: writes insert new rows.
+ * call time. Writes are append-only (versioned). Deletes physically
+ * remove all versions — used for ephemeral documents like proactivity.
  */
 
 import { db } from "@/db";
@@ -83,14 +84,25 @@ export const documentRead: Capability<OriginExecutionContext, ReadInput, ReadOut
       .orderBy(desc(document.createdAt))
       .limit(1);
 
-    if (!match) return { error: `No document at path "${path}"` };
+    if (match) {
+      return {
+        contents: match.content,
+        editedBy: match.editedBy,
+        path: match.path,
+        updatedAt: match.createdAt.toISOString(),
+      };
+    }
 
-    return {
-      contents: match.content,
-      editedBy: match.editedBy,
-      path: match.path,
-      updatedAt: match.createdAt.toISOString(),
-    };
+    // Fall back to in-context defaults (soul, guide, tools/*, etc.).
+    const fallback = ectx.principal.documents.find((d) => d.path === path);
+    if (fallback) {
+      return {
+        contents: fallback.contents,
+        path: fallback.path,
+      };
+    }
+
+    return { error: `No document at path "${path}"` };
   },
 
   description: "Read one of your documents by path. Returns the latest version",
@@ -148,4 +160,44 @@ export const documentWrite: Capability<OriginExecutionContext, WriteInput, Write
 
   inputSchema: writeInput,
   outputSchema: writeOutput,
+};
+
+// –
+// Delete
+// –
+
+const deleteInput = z.object({
+  path: z.string().describe("Document path to delete"),
+});
+const deleteOutput = z.object({
+  deleted: z.boolean(),
+  path: z.string(),
+});
+
+type DeleteInput = z.infer<typeof deleteInput>;
+type DeleteOutput = z.infer<typeof deleteOutput>;
+
+/** Delete a document and all its versions. */
+export const documentDelete: Capability<OriginExecutionContext, DeleteInput, DeleteOutput> = {
+  async call(ectx, { path }) {
+    assert(path.length > 0, "path must be non-empty");
+
+    const result = await db
+      .delete(document)
+      .where(
+        and(
+          eq(document.principalId, ectx.principal.id),
+          eq(document.path, path),
+        ),
+      )
+      .returning({ id: document.id });
+
+    return { deleted: result.length > 0, path };
+  },
+
+  description: "Delete a document and all its versions",
+  name: "document_delete",
+
+  inputSchema: deleteInput,
+  outputSchema: deleteOutput,
 };

@@ -51,7 +51,15 @@ Every action costs credits. Be efficient — avoid redundant calls, batch relate
 
 ## Proactivity
 
-When you receive a heartbeat, use it productively: check for unread emails, review pending threads, follow up on open items, organize your documents. Stay quiet when nothing needs doing.
+You receive periodic heartbeats. Your \`proactivity\` document controls what happens:
+
+- **Plain lines** run every heartbeat (standing checks).
+- **Timestamped lines** (\`2026-02-20T10:00:00Z: Do the thing\`) run once when the time arrives.
+- Remove one-shot tasks after completing them.
+- **Delete the proactivity document entirely** when all items are done. No document = no heartbeat work.
+- Create it fresh when you have new items to schedule.
+
+When woken by a heartbeat, act on the items you're given. Stay quiet when nothing needs doing.
 
 *This guide is yours to evolve. Write your own rules as you develop your own style.*`,
 

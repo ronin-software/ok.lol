@@ -22,6 +22,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "dev": "bun run dev:infra && bun run dev:ledger & bun run dev:stripe & bun --bun next dev --port 3001",
+    "heartbeat": "bun scripts/heartbeat.ts",
     "dev:infra": "docker compose -f infra/dev/compose.yml up -d",
     "dev:ledger": "TB_ADDRESSES=3000 PORT=4000 bun run services/ledger/src/index.ts",
     "deploy:fly": "bun infra/deploy.ts",
@@ -44,6 +45,7 @@
     "react-dom": "19.2.3",
     "resend": "catalog:",
     "stripe": "^20.3.1",
+    "workflow": "^4.1.0-beta.57",
     "zod": "catalog:"
   },
   "devDependencies": {
