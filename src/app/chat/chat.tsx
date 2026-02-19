@@ -67,6 +67,8 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   // True once we know the viewport is wide (≥768px); starts false for SSR safety.
   const [wide, setWide] = useState(false);
   const threadIdRef = useRef<string | null>(null);
+  // Ref-backed so the stable transport closure can call the latest handlers.
+  const onThreadIdRef = useRef<(id: string) => void>(() => {});
 
   // Auto-open sidebar on wide viewports; close drawer when it becomes narrow.
   useEffect(() => {
@@ -77,17 +79,25 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  // Keep ref in sync so the transport closure reads the latest value.
+  // Keep refs in sync so transport closures always read the latest values.
   useEffect(() => { threadIdRef.current = threadId; }, [threadId]);
 
-  // Transport injects threadId into every request body.
+  // Transport injects threadId into every request body, and captures the
+  // X-Thread-Id header so a newly-created thread is tracked immediately.
   const [transport] = useState(() =>
     new DefaultChatTransport({
       api: "/api/chat",
-      // Include messages + threadId in the request body.
       prepareSendMessagesRequest: ({ messages, body }) => ({
         body: { ...body, messages, threadId: threadIdRef.current },
       }),
+      fetch: (async (url, init) => {
+        const res = await globalThis.fetch(url, init);
+        const newId = res.headers.get("X-Thread-Id");
+        if (newId && newId !== threadIdRef.current) {
+          onThreadIdRef.current(newId);
+        }
+        return res;
+      }) as typeof fetch,
     }),
   );
 
@@ -95,6 +105,12 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
     messages: initialThreadId ? hydrate(initialMessages) as UIMessage[] : undefined,
     transport,
   });
+
+  // When the server assigns a new thread ID, capture it and refresh the list.
+  onThreadIdRef.current = (id: string) => {
+    setThreadId(id);
+    loadThreads();
+  };
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -172,6 +188,16 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
     inputRef.current?.focus();
   }
 
+  async function removeThread(id: string) {
+    await fetch(`/api/threads/${id}`, { method: "DELETE" });
+    // Clear active thread if it was deleted.
+    if (threadId === id) {
+      setThreadId(null);
+      setMessages([]);
+    }
+    loadThreads();
+  }
+
   function send() {
     const text = input.trim();
     if (text.length === 0 || streaming) return;
@@ -214,26 +240,38 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
           </div>
           <div className="flex-1 overflow-y-auto">
             {threads.map((t) => (
-              <button
+              <div
                 key={t.id}
-                type="button"
-                onClick={() => loadThread(t.id)}
                 className={[
-                  "w-full px-3 py-2 text-left transition-colors",
+                  "group relative flex items-stretch transition-colors",
                   t.id === threadId
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
                 ].join(" ")}
               >
-                <div className="truncate text-xs font-medium">
-                  {t.title || "Untitled"}
-                </div>
-                {t.snippet && (
-                  <div className="mt-0.5 truncate text-[11px] text-zinc-600">
-                    {t.snippet}
+                <button
+                  type="button"
+                  onClick={() => loadThread(t.id)}
+                  className="min-w-0 flex-1 px-3 py-2 text-left"
+                >
+                  <div className="truncate pr-5 text-xs font-medium">
+                    {t.title || "Untitled"}
                   </div>
-                )}
-              </button>
+                  {t.snippet && (
+                    <div className="mt-0.5 truncate text-[11px] text-zinc-600">
+                      {t.snippet}
+                    </div>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeThread(t.id)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  aria-label="Delete thread"
+                >
+                  ×
+                </button>
+              </div>
             ))}
             {threads.length === 0 && (
               <p className="px-3 py-4 text-xs text-zinc-600">No threads yet</p>

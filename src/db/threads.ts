@@ -54,6 +54,22 @@ export async function titleThread(threadId: string, title: string): Promise<void
   await db.update(thread).set({ title }).where(eq(thread.id, threadId));
 }
 
+/** Delete a thread and all its messages. Verifies ownership via principalId. */
+export async function deleteThread(threadId: string, principalId: string): Promise<boolean> {
+  // Verify ownership before mutating.
+  const [row] = await db
+    .select({ id: thread.id })
+    .from(thread)
+    .where(and(eq(thread.id, threadId), eq(thread.principalId, principalId)))
+    .limit(1);
+  if (!row) return false;
+
+  // Messages FK has no cascade, so delete them first.
+  await db.delete(message).where(eq(message.threadId, threadId));
+  await db.delete(thread).where(eq(thread.id, threadId));
+  return true;
+}
+
 /** Recent threads for a principal, with the latest message snippet. */
 export async function recentThreads(
   principalId: string,
