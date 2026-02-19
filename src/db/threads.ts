@@ -215,6 +215,21 @@ export async function coverMessages(messageIds: string[], summaryId: string): Pr
     .where(sql`${message.id} in ${messageIds}`);
 }
 
+/** The two role="tool" messages (call + result) for a given toolCallId. */
+export async function toolCallMessages(toolCallId: string) {
+  return db
+    .select({
+      content: message.content,
+      createdAt: message.createdAt,
+      id: message.id,
+      metadata: message.metadata,
+      threadId: message.threadId,
+    })
+    .from(message)
+    .where(sql`${message.metadata}->>'toolCallId' = ${toolCallId}`)
+    .orderBy(asc(message.createdAt));
+}
+
 /** Text search across messages in a principal's threads. */
 export async function searchMessages(
   principalId: string,

@@ -8,7 +8,9 @@ import {
   isToolUIPart,
   type ToolUIPart,
 } from "ai";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toolLabels } from "./labels";
 
 // –
 // Notification sound
@@ -428,24 +430,6 @@ function MessageBubble({ message }: { message: UIMessage }) {
 // Tool calls
 // –
 
-const toolLabels: Record<string, { active: string; done: string }> = {
-  contact_list:    { active: "Listing contacts",    done: "Listed contacts" },
-  contact_lookup:  { active: "Looking up contact",  done: "Looked up contact" },
-  contact_record:  { active: "Recording contact",   done: "Recorded contact" },
-  contact_search:  { active: "Searching contacts",  done: "Searched contacts" },
-  document_list:   { active: "Listing documents",   done: "Listed documents" },
-  document_read:   { active: "Reading document",    done: "Read document" },
-  document_write:  { active: "Writing document",    done: "Wrote document" },
-  email_send:      { active: "Sending email",       done: "Sent email" },
-  follow_up:       { active: "Following up",        done: "Followed up" },
-  http_get:        { active: "Fetching URL",        done: "Fetched URL" },
-  contact_lookup_owner:    { active: "Looking up owner",    done: "Looked up owner" },
-  thread_summary_expand:   { active: "Expanding summary",   done: "Expanded summary" },
-  thread_list:     { active: "Listing threads",     done: "Listed threads" },
-  thread_read:     { active: "Reading thread",      done: "Read thread" },
-  thread_search:   { active: "Searching threads",   done: "Searched threads" },
-};
-
 function ToolChip({ part }: { part: ToolPart }) {
   const name = getToolName(part);
   const done = part.state === "output-available";
@@ -457,13 +441,13 @@ function ToolChip({ part }: { part: ToolPart }) {
       ? labels?.done ?? name
       : `${labels?.active ?? name}…`;
 
-  return (
+  const chip = (
     <div className={[
       "my-2 rounded-lg border px-3 py-2 transition-colors",
       errored
         ? "border-red-800/50 bg-red-950/20"
         : done
-          ? "border-zinc-800 bg-zinc-950"
+          ? "border-zinc-800 bg-zinc-950 hover:border-zinc-700"
           : "border-amber-800/50 bg-amber-950/20",
     ].join(" ")}>
       <div className="flex items-center gap-2">
@@ -475,10 +459,13 @@ function ToolChip({ part }: { part: ToolPart }) {
               ? "bg-green-500"
               : "bg-amber-400 animate-pulse",
         ].join(" ")} />
-        <span className="text-xs text-zinc-300">{label}</span>
+        <span className="flex-1 text-xs text-zinc-300">{label}</span>
+        {(done || errored) && (
+          <span className="text-xs text-zinc-600">›</span>
+        )}
       </div>
 
-      {!done && !errored && "input" in part && part.input != null && (
+      {"input" in part && part.input != null && (
         <div className="mt-1 text-xs text-zinc-500">
           <ToolInput input={part.input as Record<string, unknown>} />
         </div>
@@ -497,6 +484,11 @@ function ToolChip({ part }: { part: ToolPart }) {
       )}
     </div>
   );
+
+  if ((done || errored) && part.toolCallId) {
+    return <Link href={`/dashboard/chat/tool/${part.toolCallId}`}>{chip}</Link>;
+  }
+  return chip;
 }
 
 function ToolInput({ input }: { input: Record<string, unknown> }) {
