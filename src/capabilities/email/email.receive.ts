@@ -16,7 +16,6 @@ import {
 import { normalizeSubject, stripQuotedReply } from "@/lib/email";
 import type { GetReceivingEmailResponseSuccess } from "resend";
 import act from "../act";
-import { persistOutput } from "../act/persist";
 import type { OriginExecutionContext } from "../context";
 import { logCall } from "../log";
 import { summarizeIfNeeded } from "../threads/summarize";
@@ -81,7 +80,9 @@ export default async function emailReceive(
   ].join("\n");
 
   const result = await act(ectx, { context, prompt });
-  await persistOutput(result, threadId);
+  // Consume the stream — tools (email_send, follow_up) persist their own output.
+  // Don't persistOutput here: only actual emails belong in email threads.
+  await result.text;
 }
 
 // –
