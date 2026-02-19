@@ -37,7 +37,7 @@ export const account = pgTable("account", {
 /** An always-on AI agent bound to an account. Address is `username@<domain>`. */
 export const principal = pgTable("principal", {
   accountId: text("account_id")
-    .references(() => account.id)
+    .references(() => account.id, { onDelete: "cascade" })
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
@@ -70,7 +70,7 @@ export const contact = pgTable("contact", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name"),
   principalId: uuid("principal_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
   /** "owner" = the account holder; "contact" = everyone else. */
   relationship: text("relationship", { enum: ["owner", "contact"] })
@@ -106,7 +106,7 @@ export const document = pgTable("document", {
   /** Injection order. Lower values are included first. */
   priority: integer("priority").notNull().default(0),
   principalId: uuid("principal_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
 }, (t) => [
   // All reads filter by principalId+path, ordered by createdAt DESC (latest version per path).
@@ -126,7 +126,7 @@ export const log = pgTable("log", {
   /** JSON-serializable input passed to the capability. */
   input: jsonb("input").notNull(),
   principalId: uuid("principal_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
 }, (t) => [
   // Audit log queries per principal, newest first.
@@ -149,7 +149,7 @@ export const listing = pgTable("listing", {
   /** Base fee in micro-USD. Null = free. */
   price: bigint("price", { mode: "bigint" }),
   principalId: uuid("principal_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
   /** Markdown instructions for the executor */
   skill: text("skill").notNull(),
@@ -170,14 +170,14 @@ export const hireStatusEnum = pgEnum("hire_status", ["escrowed", "settled", "ref
 /** An instance of a principal invoking a listing. Lifecycle: escrowed -> settled | refunded. */
 export const hire = pgTable("hire", {
   callerId: uuid("caller_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
   /** Caller-provided input, validated against listing.inputSchema */
   input: jsonb("input").notNull().default({}),
   listingId: uuid("listing_id")
-    .references(() => listing.id)
+    .references(() => listing.id, { onDelete: "cascade" })
     .notNull(),
   /** TigerBeetle pending transfer ID. Null when listing is fully free. */
   pendingTransferId: text("pending_transfer_id"),
@@ -207,7 +207,7 @@ export const thread = pgTable("thread", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
   principalId: uuid("principal_id")
-    .references(() => principal.id)
+    .references(() => principal.id, { onDelete: "cascade" })
     .notNull(),
   /** LLM-generated for chat, email subject for email, user-overridable. */
   title: text("title"),
@@ -243,7 +243,7 @@ export const message = pgTable("message", {
   // Self-FK declared via raw SQL in migration; Drizzle can't type circular refs.
   summaryId: uuid("summary_id"),
   threadId: uuid("thread_id")
-    .references(() => thread.id)
+    .references(() => thread.id, { onDelete: "cascade" })
     .notNull(),
   /** Estimated token count for context budgeting. */
   tokens: integer("tokens"),
@@ -264,7 +264,7 @@ export const payoutStatusEnum = pgEnum("payout_status", ["reserved", "transferre
 /** Payout saga coordination log. Tracks state across TigerBeetle and Stripe. */
 export const payout = pgTable("payout", {
   accountId: text("account_id")
-    .references(() => account.id)
+    .references(() => account.id, { onDelete: "cascade" })
     .notNull(),
   /** Withdrawal amount in micro-USD. */
   amount: bigint("amount", { mode: "bigint" }).notNull(),
@@ -291,7 +291,7 @@ export const payout = pgTable("payout", {
 /** Per-resource consumption event. One row per resource per call. */
 export const usage = pgTable("usage", {
   accountId: text("account_id")
-    .references(() => account.id)
+    .references(() => account.id, { onDelete: "cascade" })
     .notNull(),
   /** Amount consumed (tokens, characters, API calls, etc.) */
   amount: bigint("amount", { mode: "bigint" }).notNull(),
@@ -299,7 +299,7 @@ export const usage = pgTable("usage", {
   cost: bigint("cost", { mode: "bigint" }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   /** Associated hire, for settlement reimbursement. Null when self-directed. */
-  hireId: uuid("hire_id").references(() => hire.id),
+  hireId: uuid("hire_id").references(() => hire.id, { onDelete: "cascade" }),
   id: uuid("id").primaryKey().defaultRandom(),
   /** Payable resource key (e.g. "resend:send", "model-provider/model-name:input") */
   resource: text("resource").notNull(),
@@ -316,7 +316,7 @@ export const usage = pgTable("usage", {
 /** A registered worker endpoint running capabilities on user hardware. */
 export const worker = pgTable("worker", {
   accountId: text("account_id")
-    .references(() => account.id)
+    .references(() => account.id, { onDelete: "cascade" })
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),

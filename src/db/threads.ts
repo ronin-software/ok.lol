@@ -64,8 +64,6 @@ export async function deleteThread(threadId: string, principalId: string): Promi
     .limit(1);
   if (!row) return false;
 
-  // Messages FK has no cascade, so delete them first.
-  await db.delete(message).where(eq(message.threadId, threadId));
   await db.delete(thread).where(eq(thread.id, threadId));
   return true;
 }

@@ -11,14 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 import { db } from ".";
-import {
-  account,
-  contact,
-  document,
-  message,
-  principal,
-  thread,
-} from "./schema";
+import { account } from "./schema";
 
 // –
 // Connectivity
@@ -76,31 +69,5 @@ export async function seedPrincipal(
 
 /** Remove all test data created during a test. */
 export async function cleanup() {
-  // Delete in FK order: messages -> threads -> documents -> contacts -> principals -> accounts.
-  // Only delete data tied to the test account.
-  const principals = await db
-    .select({ id: principal.id })
-    .from(principal)
-    .where(eq(principal.accountId, TEST_ACCOUNT_ID));
-  const pids = principals.map((p) => p.id);
-
-  if (pids.length > 0) {
-    for (const pid of pids) {
-      // Messages via threads.
-      const threads = await db
-        .select({ id: thread.id })
-        .from(thread)
-        .where(eq(thread.principalId, pid));
-      for (const t of threads) {
-        await db.delete(message).where(eq(message.threadId, t.id));
-      }
-      await db.delete(thread).where(eq(thread.principalId, pid));
-      await db.delete(document).where(eq(document.principalId, pid));
-      await db.delete(contact).where(eq(contact.principalId, pid));
-    }
-    for (const pid of pids) {
-      await db.delete(principal).where(eq(principal.id, pid));
-    }
-  }
   await db.delete(account).where(eq(account.id, TEST_ACCOUNT_ID));
 }
