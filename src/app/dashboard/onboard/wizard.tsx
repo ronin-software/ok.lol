@@ -106,7 +106,8 @@ export default function Wizard({ domain }: { domain: string }) {
                 Name your pal
               </h1>
               <p className="mt-2 text-sm text-zinc-400">
-                Give it a name. This is how it introduces itself.
+                Your pal is your always-on AI agent. Give it a name — this is
+                how it introduces itself.
               </p>
             </div>
             <input
@@ -134,11 +135,11 @@ export default function Wizard({ domain }: { domain: string }) {
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Choose an email
+                Set up {name || "your pal"}&apos;s email
               </h1>
               <p className="mt-2 text-sm text-zinc-400">
-                {name || "Your pal"} will send and receive emails at this
-                address.
+                The email address to reach your pal. It&apos;s recommended to
+                use a username associated with you.
               </p>
             </div>
             <div className="flex items-center gap-0">
