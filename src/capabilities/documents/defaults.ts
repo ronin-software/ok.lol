@@ -184,7 +184,7 @@ const toolTemplates: Record<string, ToolTemplate> = {
     contents:
       "Write or update a document. Creates a new version (append-only). " +
       "Use for persisting knowledge, preferences, and notes. " +
-      "You can customize your own tool guides by writing to `tools/{name}`.",
+      "You can customize your own tool guides (for example, with learnings, difficulties encountered, wishes or DO's/DONT's) by writing to `tools/{name}`.",
     priority: 10,
   },
 
@@ -271,6 +271,9 @@ const toolTemplates: Record<string, ToolTemplate> = {
     priority: 10,
   },
 };
+
+/** Tool names that have system-default docs. */
+export const TOOL_NAMES = Object.keys(toolTemplates);
 
 // –
 // Merge

@@ -1,4 +1,4 @@
-import { withDefaults } from "@/capabilities/documents/defaults";
+import { TOOL_NAMES, withDefaults } from "@/capabilities/documents/defaults";
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
 import { document } from "@/db/schema";
@@ -10,15 +10,19 @@ import DocumentDetail from "../../document-detail";
 export default async function DocumentPage({
   params,
 }: {
-  params: Promise<{ path: string }>;
+  params: Promise<{ path: string[] }>;
 }) {
   const { pal } = await requirePrincipal();
-  const docPath = decodeURIComponent((await params).path);
+  const segments = (await params).path;
+  const docPath = segments.join("/");
 
-  const all = withDefaults(await currentDocuments(pal.id));
+  // Resolve document (merges user docs with system defaults).
+  const toolSpecs = TOOL_NAMES.map((name) => ({ description: "", name }));
+  const all = withDefaults(await currentDocuments(pal.id), toolSpecs);
   const doc = all.find((d) => d.path === docPath);
   if (!doc) notFound();
 
+  // Load version history from DB (empty for uncustomized defaults).
   const versions = await db
     .select({
       content: document.content,

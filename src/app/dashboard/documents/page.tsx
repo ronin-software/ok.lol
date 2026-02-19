@@ -1,4 +1,4 @@
-import { withDefaults } from "@/capabilities/documents/defaults";
+import { TOOL_NAMES, withDefaults } from "@/capabilities/documents/defaults";
 import { currentDocuments } from "@/db/documents";
 import { requirePrincipal } from "../auth";
 import type { DocumentData } from "../document-editor";
@@ -19,15 +19,17 @@ export default async function DocumentsPage() {
 // Resolve
 // –
 
-/** Merge user documents with system defaults. */
+/** Specs for origin capabilities that have tool doc templates. */
+const toolSpecs = TOOL_NAMES.map((name) => ({ description: "", name }));
+
+/** Merge user documents with system defaults (including tool docs). */
 async function resolveDocuments(principalId: string): Promise<DocumentData[]> {
   const docs = await currentDocuments(principalId);
-  const merged = withDefaults(docs);
+  const merged = withDefaults(docs, toolSpecs);
 
   return merged
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
     .map((d) => ({
-      // Strip embeddings — only pass phrase lists to the client.
       activation: d.activation
         ? { negative: d.activation.negative, positive: d.activation.positive }
         : undefined,

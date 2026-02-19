@@ -33,21 +33,43 @@ interface Props {
 
 /** Renders the document list with links to detail pages. */
 export default function DocumentsSection({ documents, principalId }: Props) {
+  const docs = documents.filter((d) => !d.path.startsWith("tools/"));
+  const tools = documents.filter((d) => d.path.startsWith("tools/"));
+
   return (
-    <div className="mt-8">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-        Documents
-      </p>
-      <p className="mt-1 text-sm text-zinc-400">
-        These shape your pal&apos;s personality and memory. Edits create new
-        versions — nothing is lost.
-      </p>
-      <div className="mt-4 space-y-2">
-        {documents.map((doc) => (
-          <DocumentLink key={doc.path} doc={doc} />
-        ))}
-      </div>
-      <NewDocumentCard principalId={principalId} />
+    <div className="mt-8 space-y-10">
+      <section>
+        <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+          Documents
+        </p>
+        <p className="mt-1 text-sm text-zinc-400">
+          These shape your pal&apos;s personality and memory. Edits create new
+          versions — nothing is lost.
+        </p>
+        <div className="mt-4 space-y-2">
+          {docs.map((doc) => (
+            <DocumentLink key={doc.path} doc={doc} />
+          ))}
+        </div>
+        <NewDocumentCard principalId={principalId} />
+      </section>
+
+      {tools.length > 0 && (
+        <section>
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+            Tools
+          </p>
+          <p className="mt-1 text-sm text-zinc-400">
+            Guidance your pal receives for each capability. Override a default
+            by editing it.
+          </p>
+          <div className="mt-4 space-y-2">
+            {tools.map((doc) => (
+              <DocumentLink key={doc.path} doc={doc} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -59,7 +81,7 @@ export default function DocumentsSection({ documents, principalId }: Props) {
 function DocumentLink({ doc }: { doc: DocumentData }) {
   return (
     <Link
-      href={`/dashboard/documents/${encodeURIComponent(doc.path)}`}
+      href={docHref(doc.path)}
       className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 transition-colors hover:border-zinc-700 hover:bg-zinc-800"
     >
       <div className="flex items-center gap-3">
@@ -87,6 +109,11 @@ function DocumentLink({ doc }: { doc: DocumentData }) {
 // –
 // Helpers
 // –
+
+/** Encode a document path for use in a URL, preserving `/` as a separator. */
+function docHref(path: string) {
+  return `/dashboard/documents/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
 
 function timeago(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -169,7 +196,7 @@ function NewDocumentCard({ principalId }: { principalId: string }) {
       } else {
         reset();
         setOpen(false);
-        router.push(`/dashboard/documents/${encodeURIComponent(path.trim())}`);
+        router.push(docHref(path.trim()));
       }
     });
   }
