@@ -243,7 +243,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
               <div
                 key={t.id}
                 className={[
-                  "group relative flex items-stretch transition-colors",
+                  "flex items-stretch transition-colors",
                   t.id === threadId
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200",
@@ -254,7 +254,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
                   onClick={() => loadThread(t.id)}
                   className="min-w-0 flex-1 px-3 py-2 text-left"
                 >
-                  <div className="truncate pr-5 text-xs font-medium">
+                  <div className="truncate text-xs font-medium">
                     {t.title || "Untitled"}
                   </div>
                   {t.snippet && (
@@ -266,7 +266,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
                 <button
                   type="button"
                   onClick={() => removeThread(t.id)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  className="shrink-0 self-center px-2 text-sm text-zinc-700 transition-colors hover:text-red-400"
                   aria-label="Delete thread"
                 >
                   ×
