@@ -2,6 +2,7 @@ import { assert } from "@/lib/assert";
 import { dollarsToMicro, recordUsage } from "@/lib/billing";
 import { env } from "@/lib/env";
 import { gateway } from "@/lib/gateway";
+import { embedText, filterDocuments } from "@/lib/relevance";
 import type { UIMessage } from "ai";
 import {
   convertToModelMessages,
@@ -36,6 +37,8 @@ const MAX_STEPS = 10;
 
 /** Input to the agent loop. */
 type Input = {
+  /** Cross-thread awareness injected by the entry point (email history, recent threads, etc). */
+  context?: string;
   /** UI messages for multi-turn chat. Converted to model messages internally. */
   messages?: UIMessage[];
   /** Optional model override (gateway format: provider/model). */
@@ -53,12 +56,31 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   await logCall(ectx, "act", input);
   const modelId = input.model ?? DEFAULT_MODEL;
 
-  // Build all tools (origin + remote workers) and assemble context.
-  const { capabilities, tools } = await buildTools(ectx);
-  const documents = withDefaults(ectx.principal.documents);
+  // Derive the prompt text for embedding (used for activation filtering).
+  const promptText = input.prompt
+    ?? input.messages?.filter((m) => m.role === "user").map((m) =>
+      m.parts.filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+        .map((p) => p.text).join(""),
+    ).at(-1)
+    ?? "";
+
+  // Build tools and embed prompt in parallel.
+  const hasActivation = ectx.principal.documents.some((d) => d.activation);
+  const [{ capabilities, tools }, promptEmbedding] = await Promise.all([
+    buildTools(ectx),
+    hasActivation && promptText ? embedText(promptText) : Promise.resolve(undefined),
+  ]);
+
+  // Merge defaults, then filter by activation relevance.
+  const allDocuments = withDefaults(ectx.principal.documents, capabilities);
+  const documents = promptEmbedding
+    ? (await filterDocuments(allDocuments, promptEmbedding)).injected
+    : allDocuments;
+
   const system = assemblePrompt({
     caller: ectx.caller,
     capabilities,
+    context: input.context,
     credits: ectx.principal.credits,
     domain: env.EMAIL_DOMAIN,
     documents,

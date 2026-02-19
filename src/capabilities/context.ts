@@ -7,8 +7,20 @@ import { available, lookupAccount } from "@/lib/tigerbeetle";
 import { eq } from "drizzle-orm";
 import { jwtVerify } from "jose";
 
+/** When a document should/shouldn't be injected, based on prompt similarity. */
+export type Activation = {
+  /** Pre-computed embeddings (stored in DB, cached in-memory for defaults). */
+  embeddings?: { negative: number[][]; positive: number[][] };
+  /** Phrases describing when this should NOT be in context. */
+  negative?: string[];
+  /** Phrases describing when this should be in context. */
+  positive?: string[];
+};
+
 /** A principal's document, resolved from the DB or injected as a system default. */
 export type Document = {
+  /** Relevance filtering criteria. Documents without activation always inject. */
+  activation?: Activation;
   /** Document body. */
   contents: string;
   /** True when this is a system-provided default, not a stored document. */

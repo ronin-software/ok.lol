@@ -6,7 +6,13 @@
  * This is an internal handler, not an agent tool.
  */
 
-import { createThread, findEmailThread, insertMessage } from "@/db/threads";
+import {
+  activeContext,
+  createThread,
+  findEmailThread,
+  insertMessage,
+  threadsForContact,
+} from "@/db/threads";
 import { normalizeSubject, stripQuotedReply } from "@/lib/email";
 import type { GetReceivingEmailResponseSuccess } from "resend";
 import act from "../act";
@@ -50,6 +56,9 @@ export default async function emailReceive(
 
   await summarizeIfNeeded(threadId);
 
+  // Build interaction context: same-thread history + cross-thread sender history.
+  const context = await buildEmailContext(ectx.principal.id, threadId, email.from);
+
   const prompt = [
     "You received an email. Read it carefully and decide how to handle it.",
     "",
@@ -71,8 +80,45 @@ export default async function emailReceive(
     body || "(no body)",
   ].join("\n");
 
-  const result = await act(ectx, { prompt });
+  const result = await act(ectx, { context, prompt });
   await persistOutput(result, threadId);
+}
+
+// –
+// Context
+// –
+
+/** Same-thread history + cross-thread sender history for email context injection. */
+async function buildEmailContext(
+  principalId: string,
+  threadId: string,
+  from: string,
+): Promise<string | undefined> {
+  const [messages, senderThreads] = await Promise.all([
+    activeContext(threadId),
+    threadsForContact(principalId, from),
+  ]);
+
+  const parts: string[] = [];
+
+  // Same-thread history (prior messages in this email thread).
+  if (messages.length > 1) {
+    const lines = messages.slice(0, -1).map(
+      (m) => `[${m.role}] ${m.content.slice(0, 200)}`,
+    );
+    parts.push(`### This thread\n${lines.join("\n")}`);
+  }
+
+  // Cross-thread sender history (other threads involving this sender).
+  const other = senderThreads.filter((t) => t.id !== threadId);
+  if (other.length > 0) {
+    const lines = other.slice(0, 5).map(
+      (t) => `- ${t.title ?? "(untitled)"}: ${t.snippet?.slice(0, 120) ?? ""}`,
+    );
+    parts.push(`### Other threads with ${from}\n${lines.join("\n")}`);
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
 
 // –

@@ -5,12 +5,13 @@
  * per (principalId, path). These helpers encapsulate that dedup logic.
  */
 
-import type { Document } from "@/capabilities/context";
+import type { Activation, Document } from "@/capabilities/context";
 import { sql } from "drizzle-orm";
 import { db } from ".";
 
 // Raw snake_case row returned by the DISTINCT ON query below.
 type DocumentRow = {
+  activation: Activation | null;
   content: string;
   created_at: string;
   edited_by: "principal" | "user";
@@ -30,13 +31,14 @@ export async function currentDocuments(
 ): Promise<Document[]> {
   const rows = await db.execute<DocumentRow>(sql`
     SELECT DISTINCT ON (path)
-      id, principal_id, path, content, priority, edited_by, created_at
+      id, principal_id, path, content, activation, priority, edited_by, created_at
     FROM document
     WHERE principal_id = ${principalId}
     ORDER BY path, created_at DESC
   `);
 
   return rows.map((d) => ({
+    ...(d.activation ? { activation: d.activation } : {}),
     contents: d.content,
     path: d.path,
     priority: d.priority,

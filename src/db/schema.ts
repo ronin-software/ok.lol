@@ -93,6 +93,8 @@ export const contact = pgTable("contact", {
  * Paths are hierarchical: "soul", "identity", "skills/email-handling", etc.
  */
 export const document = pgTable("document", {
+  /** Activation phrases + pre-computed embeddings for relevance filtering. */
+  activation: jsonb("activation"),
   /** Document body injected into the system prompt. */
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

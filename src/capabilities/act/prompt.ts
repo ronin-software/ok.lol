@@ -28,6 +28,8 @@ export type PromptOptions = {
   caller?: OriginExecutionContext["caller"];
   /** Available capabilities for the directory section. */
   capabilities: CapabilitySpec[];
+  /** Cross-thread awareness from the entry point. Injected as ## Context. */
+  context?: string;
   /** Credit balance in micro-USD. */
   credits: bigint;
   /** Email domain for the current environment. */
@@ -56,7 +58,13 @@ export function assemblePrompt(options: PromptOptions): string {
   const preamble = buildPreamble(options);
   const { omitted, section: docs } = buildDocuments(options.documents, budget);
   const caps = buildCapabilities(options.capabilities);
-  const parts = [preamble, docs, caps];
+  const parts = [preamble, docs];
+
+  if (options.context) {
+    parts.push(`## Context\n\n${options.context}`);
+  }
+
+  parts.push(caps);
 
   // If any documents were omitted, tell the agent it can load them.
   if (omitted.length > 0) {
@@ -144,6 +152,10 @@ function buildDocuments(
 function buildCapabilities(
   capabilities: CapabilitySpec[],
 ): string {
+  const hasWorkers = capabilities.some((c) => c.description.startsWith("[worker:"));
+  const preamble = hasWorkers
+    ? "Workers are computers you can control remotely. Tools prefixed with a worker name run on that machine.\n\n"
+    : "";
   const lines = capabilities.map((c) => `- **${c.name}**: ${c.description}`);
-  return `## Tools\n\n${lines.join("\n")}`;
+  return `## Tools\n\n${preamble}${lines.join("\n")}`;
 }

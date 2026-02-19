@@ -1,14 +1,45 @@
 import { createGateway, generateText, stepCountIs, tool } from "ai";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
+import type { CapabilitySpec } from "@ok.lol/capability";
 import type { Document } from "../context";
+import {
+  contactLookup,
+  contactLookupOwner,
+  contactRecord,
+  contactSearch,
+} from "../contacts";
 import { documentList, documentRead, documentWrite } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
 import emailSend from "../email/email.send";
+import {
+  followUp,
+  threadList,
+  threadRead,
+  threadSearch,
+  threadSummaryExpand,
+} from "../threads";
 import { assemblePrompt, type PromptOptions } from "./prompt";
 
-/** Capabilities for test prompt assembly. */
-const testCapabilities = [emailSend, documentList, documentRead, documentWrite];
+/** All origin capabilities for realistic test prompts. */
+const allCapabilities: CapabilitySpec[] = [
+  contactLookup,
+  contactLookupOwner,
+  contactRecord,
+  contactSearch,
+  documentList,
+  documentRead,
+  documentWrite,
+  emailSend,
+  followUp,
+  threadList,
+  threadRead,
+  threadSearch,
+  threadSummaryExpand,
+];
+
+/** Minimal subset for backward-compatible tests. */
+const testCapabilities: CapabilitySpec[] = [emailSend, documentList, documentRead, documentWrite];
 
 /**
  * Tests for the `act` capability's context injection, document discovery,
@@ -17,9 +48,13 @@ const testCapabilities = [emailSend, documentList, documentRead, documentWrite];
  * Unit tests validate prompt assembly and defaults deterministically.
  * Integration tests call the AI Gateway to verify the model actually
  * receives and acts on injected context. These require AI_GATEWAY_API_KEY.
+ *
+ * Multi-step agentic tests (tool round-trips, large contexts) are gated
+ * behind RUN_EXPENSIVE_TESTS=1 to avoid burning credits on every run.
  */
 
 const HAS_API_KEY = !!process.env.AI_GATEWAY_API_KEY;
+const EXPENSIVE = HAS_API_KEY && !!process.env.RUN_EXPENSIVE_TESTS;
 const gw = HAS_API_KEY ? createGateway() : undefined;
 
 /** Gateway model ID for integration tests. */
@@ -102,6 +137,47 @@ describe("withDefaults", () => {
     // Other core paths filled with defaults.
     expect(result.find((d) => d.path === "soul")!.default).toBe(true);
     expect(result.find((d) => d.path === "user")!.default).toBe(true);
+  });
+
+  test("injects tool docs for available capabilities", () => {
+    const caps: CapabilitySpec[] = [
+      { description: "Send email", name: "email_send" },
+      { description: "Look up contact", name: "contact_lookup" },
+    ];
+    const result = withDefaults([], caps);
+    const emailDoc = result.find((d) => d.path === "tools/email_send");
+    expect(emailDoc).toBeDefined();
+    expect(emailDoc!.default).toBe(true);
+    expect(emailDoc!.contents).toContain("Prerequisites");
+    const contactDoc = result.find((d) => d.path === "tools/contact_lookup");
+    expect(contactDoc).toBeDefined();
+    expect(contactDoc!.contents).toContain("trust level");
+  });
+
+  test("does not inject tool docs for capabilities without templates", () => {
+    const caps: CapabilitySpec[] = [
+      { description: "Some unknown tool", name: "unknown_tool_xyz" },
+    ];
+    const result = withDefaults([], caps);
+    expect(result.find((d) => d.path === "tools/unknown_tool_xyz")).toBeUndefined();
+  });
+
+  test("principal override replaces tool doc default", () => {
+    const caps: CapabilitySpec[] = [
+      { description: "Send email", name: "email_send" },
+    ];
+    const custom = doc("tools/email_send", "My custom email guide");
+    const result = withDefaults([custom], caps);
+    const emailDocs = result.filter((d) => d.path === "tools/email_send");
+    expect(emailDocs).toHaveLength(1);
+    expect(emailDocs[0]!.contents).toBe("My custom email guide");
+    expect(emailDocs[0]!.default).toBeUndefined();
+  });
+
+  test("omits tool docs when no capabilities provided", () => {
+    const result = withDefaults([]);
+    const toolDocs = result.filter((d) => d.path.startsWith("tools/"));
+    expect(toolDocs).toHaveLength(0);
   });
 });
 
@@ -190,6 +266,36 @@ describe("assemblePrompt", () => {
     const prompt = assemblePrompt(options({ documents: withDefaults([]) }));
     expect(prompt).toContain("(default — customize by writing to this path)");
   });
+
+  test("injects context section when provided", () => {
+    const prompt = assemblePrompt(options({
+      context: "### Recent threads\n- [chat] Project planning: let's discuss...",
+    }));
+    expect(prompt).toContain("## Context");
+    expect(prompt).toContain("Project planning");
+  });
+
+  test("omits context section when absent", () => {
+    // Use docs without "## Context" in their body to avoid false matches.
+    const prompt = assemblePrompt(options({
+      documents: [doc("soul", "Be helpful", -30)],
+    }));
+    expect(prompt).not.toContain("## Context");
+  });
+
+  test("includes worker preamble when worker tools present", () => {
+    const caps: CapabilitySpec[] = [
+      ...testCapabilities,
+      { description: "[worker: macbook] Run a shell command", name: "macbook_bash" },
+    ];
+    const prompt = assemblePrompt(options({ capabilities: caps }));
+    expect(prompt).toContain("Workers are computers you can control remotely");
+  });
+
+  test("omits worker preamble when no workers", () => {
+    const prompt = assemblePrompt(options());
+    expect(prompt).not.toContain("Workers are computers");
+  });
 });
 
 // –
@@ -232,7 +338,7 @@ describe.skipIf(!HAS_API_KEY)("context injection (model)", () => {
 // Integration: document discovery
 // –
 
-describe.skipIf(!HAS_API_KEY)("document discovery (model)", () => {
+describe.skipIf(!EXPENSIVE)("document discovery (model)", () => {
   test("agent reads document when told content was truncated", async () => {
     // Build a document that will be truncated. The answer is at the end.
     const filler = "This is filler text. ".repeat(1200);
@@ -279,7 +385,7 @@ describe.skipIf(!HAS_API_KEY)("document discovery (model)", () => {
 // Integration: capability calling
 // –
 
-describe.skipIf(!HAS_API_KEY)("capability calling (model)", () => {
+describe.skipIf(!EXPENSIVE)("capability calling (model)", () => {
   test("calls email_send when asked to send an email", async () => {
     const docs = withDefaults([]);
     const system = assemblePrompt(options({ documents: docs }));
@@ -383,5 +489,255 @@ describe.skipIf(!HAS_API_KEY)("capability calling (model)", () => {
     expect(writeArgs).toBeDefined();
     expect(writeArgs!.path).toBe("identity");
     expect(writeArgs!.content.toLowerCase()).toContain("nova");
+  }, MODEL_TIMEOUT);
+});
+
+// –
+// Integration: contact lookup before send
+// –
+
+describe.skipIf(!EXPENSIVE)("contact lookup before send (model)", () => {
+  test("looks up contact before sending email", async () => {
+    const docs = withDefaults([], allCapabilities);
+    const system = assemblePrompt(options({
+      capabilities: allCapabilities,
+      documents: docs,
+    }));
+
+    const calls: string[] = [];
+    const tools = {
+      contact_lookup: tool({
+        description: "Look up a contact by email.",
+        execute: async (args) => {
+          calls.push("contact_lookup");
+          return {
+            isOwner: false,
+            name: "Alice",
+            notesPath: `contacts/${args.email}`,
+            relationship: "contact",
+          };
+        },
+        inputSchema: z.object({ email: z.string() }),
+      }),
+      contact_search: tool({
+        description: "Search contacts by name or email.",
+        execute: async () => {
+          calls.push("contact_search");
+          return [{ email: "alice@example.com", name: "Alice", relationship: "contact" }];
+        },
+        inputSchema: z.object({ query: z.string() }),
+      }),
+      email_send: tool({
+        description: "Send an email.",
+        execute: async () => {
+          calls.push("email_send");
+          return { sent: true };
+        },
+        inputSchema: z.object({
+          subject: z.string(),
+          text: z.string(),
+          to: z.string(),
+        }),
+      }),
+    };
+
+    await generateText({
+      model: model(),
+      prompt: "Email alice@example.com to ask about the project deadline.",
+      stopWhen: stepCountIs(5),
+      system,
+      tools,
+    });
+
+    // Contact lookup/search should precede email_send.
+    const lookupIdx = calls.findIndex((c) => c === "contact_lookup" || c === "contact_search");
+    const sendIdx = calls.findIndex((c) => c === "email_send");
+    expect(lookupIdx).toBeGreaterThanOrEqual(0);
+    expect(sendIdx).toBeGreaterThan(lookupIdx);
+  }, MODEL_TIMEOUT);
+});
+
+// –
+// Integration: follow-up thread selection
+// –
+
+describe.skipIf(!EXPENSIVE)("follow-up thread selection (model)", () => {
+  test("follows up in existing thread instead of emailing owner", async () => {
+    const docs = withDefaults([], allCapabilities);
+    const system = assemblePrompt(options({
+      capabilities: allCapabilities,
+      context: "### Other threads with alice@example.com\n- Email Alice about deadline: waiting for reply",
+      documents: docs,
+    }));
+
+    const calls: string[] = [];
+    const tools = {
+      contact_lookup: tool({
+        description: "Look up a contact by email.",
+        execute: async () => {
+          calls.push("contact_lookup");
+          return { isOwner: false, name: "Alice", notesPath: "contacts/alice@example.com", relationship: "contact" };
+        },
+        inputSchema: z.object({ email: z.string() }),
+      }),
+      email_send: tool({
+        description: "Send an email.",
+        execute: async () => { calls.push("email_send"); return { sent: true }; },
+        inputSchema: z.object({ subject: z.string(), text: z.string(), to: z.string() }),
+      }),
+      follow_up: tool({
+        description: "Post a message in another thread.",
+        execute: async () => { calls.push("follow_up"); },
+        inputSchema: z.object({ content: z.string(), threadId: z.string() }),
+      }),
+      thread_list: tool({
+        description: "List recent threads.",
+        execute: async () => {
+          calls.push("thread_list");
+          return {
+            threads: [{
+              channel: "chat",
+              id: "thread-abc",
+              snippet: "Email Alice about the deadline and let me know when she replies",
+              snippetAt: new Date().toISOString(),
+              title: "Email Alice about deadline",
+            }],
+          };
+        },
+        inputSchema: z.object({ channel: z.string().optional(), limit: z.number().optional() }),
+      }),
+      thread_search: tool({
+        description: "Search threads by content.",
+        execute: async () => {
+          calls.push("thread_search");
+          return {
+            results: [{
+              content: "Email Alice about the deadline and let me know when she replies",
+              id: "msg-1",
+              role: "user",
+              threadId: "thread-abc",
+              threadTitle: "Email Alice about deadline",
+            }],
+          };
+        },
+        inputSchema: z.object({ limit: z.number().optional(), query: z.string() }),
+      }),
+    };
+
+    await generateText({
+      model: model(),
+      prompt: [
+        "You received an email reply from Alice (alice@example.com).",
+        "She says the deadline is next Friday.",
+        "Your owner previously asked you to email Alice and report back.",
+        "Handle this appropriately.",
+      ].join("\n"),
+      stopWhen: stepCountIs(8),
+      system,
+      tools,
+    });
+
+    // Should use follow_up (or thread_search/thread_list to find the thread).
+    expect(calls).toContain("follow_up");
+  }, MODEL_TIMEOUT);
+});
+
+// –
+// Integration: cross-thread context prevents rehashing
+// –
+
+describe.skipIf(!EXPENSIVE)("cross-thread context (model)", () => {
+  test("references prior interactions instead of starting fresh", async () => {
+    const docs = withDefaults([], allCapabilities);
+    const system = assemblePrompt(options({
+      capabilities: allCapabilities,
+      context: [
+        "### Other threads with bob@example.com",
+        "- Project kickoff: Discussed timeline, agreed on March 1 launch date",
+        "- Budget review: Bob approved $50k budget, waiting on PO",
+      ].join("\n"),
+      documents: docs,
+    }));
+
+    const tools = {
+      contact_lookup: tool({
+        description: "Look up a contact by email.",
+        execute: async () => ({
+          isOwner: false,
+          name: "Bob",
+          notesPath: "contacts/bob@example.com",
+          relationship: "contact",
+        }),
+        inputSchema: z.object({ email: z.string() }),
+      }),
+      email_send: tool({
+        description: "Send an email.",
+        execute: async () => ({ sent: true }),
+        inputSchema: z.object({ subject: z.string(), text: z.string(), to: z.string() }),
+      }),
+    };
+
+    const result = await generateText({
+      model: model(),
+      prompt: [
+        "You received an email from Bob (bob@example.com) asking 'Any updates on the project?'",
+        "Reply to Bob with an appropriate response.",
+      ].join("\n"),
+      stopWhen: stepCountIs(5),
+      system,
+      tools,
+    });
+
+    // The response should reference the prior context, not start from scratch.
+    const text = result.text.toLowerCase();
+    const referencesContext =
+      text.includes("march") ||
+      text.includes("timeline") ||
+      text.includes("budget") ||
+      text.includes("launch") ||
+      text.includes("50k") ||
+      text.includes("po");
+    expect(referencesContext).toBe(true);
+  }, MODEL_TIMEOUT);
+});
+
+// –
+// Integration: worker capability usage
+// –
+
+describe.skipIf(!EXPENSIVE)("worker capability (model)", () => {
+  test("calls worker tool when task requires it", async () => {
+    const workerCap: CapabilitySpec = {
+      description: "[worker: macbook] Run a shell command on the user's computer",
+      name: "macbook_bash",
+    };
+    const caps = [...allCapabilities, workerCap];
+    const docs = withDefaults([], caps);
+    const system = assemblePrompt(options({
+      capabilities: caps,
+      documents: docs,
+    }));
+
+    let workerCalled = false;
+    const tools = {
+      macbook_bash: tool({
+        description: "[worker: macbook] Run a shell command on the user's computer",
+        execute: async () => {
+          workerCalled = true;
+          return { output: "total 42\ndrwxr-xr-x  5 user  staff  160 Jan  1 00:00 Documents", exitCode: 0 };
+        },
+        inputSchema: z.object({ command: z.string() }),
+      }),
+    };
+
+    await generateText({
+      model: model(),
+      prompt: "List the files in my home directory.",
+      stopWhen: stepCountIs(5),
+      system,
+      tools,
+    });
+
+    expect(workerCalled).toBe(true);
   }, MODEL_TIMEOUT);
 });

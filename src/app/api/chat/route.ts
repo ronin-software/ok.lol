@@ -2,7 +2,7 @@ import act from "@/capabilities/act";
 import { autoTitle, persistOutput } from "@/capabilities/act/persist";
 import { getExecutionContext } from "@/capabilities/context";
 import { summarizeIfNeeded } from "@/capabilities/threads/summarize";
-import { createThread, insertMessage } from "@/db/threads";
+import { createThread, insertMessage, recentThreads } from "@/db/threads";
 import { verify } from "@/lib/session";
 import type { UIMessage } from "ai";
 import { after } from "next/server";
@@ -48,7 +48,10 @@ export async function POST(req: Request) {
 
   await summarizeIfNeeded(threadId);
 
-  const result = await act(ectx, { messages });
+  // Recent thread summaries give the model cross-thread awareness.
+  const context = await buildChatContext(ectx.principal.id);
+
+  const result = await act(ectx, { context, messages });
   const capturedThreadId = threadId;
   const capturedUserText = userText;
 
@@ -62,4 +65,19 @@ export async function POST(req: Request) {
   });
 
   return stream;
+}
+
+// –
+// Context
+// –
+
+/** Recent thread titles + snippets so the model has cross-thread awareness. */
+async function buildChatContext(principalId: string): Promise<string | undefined> {
+  const threads = await recentThreads(principalId, { limit: 10 });
+  if (threads.length === 0) return undefined;
+
+  const lines = threads.map(
+    (t) => `- [${t.channel}] ${t.title ?? "(untitled)"}: ${t.snippet?.slice(0, 120) ?? ""}`,
+  );
+  return `### Recent threads\n${lines.join("\n")}`;
 }
