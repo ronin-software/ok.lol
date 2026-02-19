@@ -10,6 +10,31 @@ import {
 } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// –
+// Notification sound
+// –
+
+let audioCtx: AudioContext | null = null;
+
+/** Two-note ascending chime (D5 → A5) via Web Audio. */
+function playPing() {
+  audioCtx ??= new AudioContext();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  const t = audioCtx.currentTime;
+  for (const [freq, offset] of [[587, 0], [880, 0.08]] as const) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.12, t + offset);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.15);
+    osc.start(t + offset);
+    osc.stop(t + offset + 0.15);
+  }
+}
+
 type Thread = {
   channel: string;
   createdAt: string;
@@ -74,7 +99,16 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevStatusRef = useRef(status);
   const streaming = status === "streaming";
+
+  // Ping when a streamed response finishes.
+  useEffect(() => {
+    if (prevStatusRef.current === "streaming" && status === "ready") {
+      playPing();
+    }
+    prevStatusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -125,6 +159,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
       const next = hydrate(stored);
       if (next.length > messages.length) {
         setMessages(next as UIMessage[]);
+        playPing();
       }
     }, 5_000);
     return () => clearInterval(id);
