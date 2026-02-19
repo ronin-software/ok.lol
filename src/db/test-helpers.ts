@@ -11,7 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 import { db } from ".";
-import { account } from "./schema";
+import { account, principal } from "./schema";
 
 // –
 // Connectivity
