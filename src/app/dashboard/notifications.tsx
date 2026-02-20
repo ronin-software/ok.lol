@@ -3,10 +3,12 @@
 import { playPing } from "@/app/chat/ping";
 import { createRivetKit } from "@rivetkit/next-js/client";
 import type { registry } from "@/rivet/registry";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 
-const { useActor } = createRivetKit<typeof registry>();
+const { useActor } = createRivetKit<typeof registry>(
+  `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3001"}/api/rivet`,
+);
 
 // –
 // Types
@@ -35,11 +37,17 @@ export default function Notifications({ principalId }: { principalId: string }) 
     name: "inbox",
   });
 
+  const searchParams = useSearchParams();
+  const activeThread = searchParams.get("thread");
+
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   inbox.useEvent("message", (payload: { content: string; threadId: string; title: string }) => {
+    // Chat already provides its own feedback for the active thread.
+    if (payload.threadId === activeThread) return;
+
     const id = crypto.randomUUID();
     setToasts((prev) => [...prev, { ...payload, id }]);
     playPing();

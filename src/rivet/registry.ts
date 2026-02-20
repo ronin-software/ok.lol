@@ -4,6 +4,8 @@
  * The `inbox` actor is keyed by principal ID. Clients connect via
  * WebSocket to receive push notifications. When no clients are
  * connected, the server falls back to email.
+ *
+ * Default driver — local filesystem in dev, Rivet Cloud in production.
  */
 
 import { actor, setup } from "rivetkit";

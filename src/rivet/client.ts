@@ -1,13 +1,14 @@
 /**
  * Server-side Rivet client for sending notifications.
- * Endpoint is read from RIVET_ENDPOINT env var by rivetkit.
  */
 
 import { createClient } from "rivetkit/client";
-import type { registry } from "./registry";
-import type { NotifyPayload } from "./registry";
+import type { registry, NotifyPayload } from "./registry";
 
-const client = createClient<typeof registry>();
+const endpoint = process.env.RIVET_ENDPOINT
+  ?? `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/rivet`;
+
+const client = createClient<typeof registry>({ endpoint });
 
 /**
  * Send a notification to a principal's inbox actor.
