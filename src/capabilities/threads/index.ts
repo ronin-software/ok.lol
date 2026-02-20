@@ -6,13 +6,10 @@
  * and post follow-up messages to threads it owns.
  */
 
-import { findOwnerContact } from "@/db/contacts";
 import {
   activeContext,
   children as childrenOf,
   expand as expandTree,
-  getThreadMeta,
-  insertMessage,
   recentThreads,
   searchMessages,
 } from "@/db/threads";
@@ -20,20 +17,18 @@ import { assert } from "@/lib/assert";
 import type { Capability } from "@ok.lol/capability";
 import { z } from "zod";
 import type { OriginExecutionContext } from "../context";
-import emailSend from "../email/email.send";
 
 // –
 // List
 // –
 
 const listInput = z.object({
-  channel: z.enum(["chat", "email"]).optional().describe("Filter by channel"),
   limit: z.number().int().min(1).max(50).optional().describe("Max results (default 20)"),
+  scope: z.enum(["mine", "others"]).optional().describe("'mine' = threads with chat messages, 'others' = email-only threads"),
 });
 
 const listOutput = z.object({
   threads: z.array(z.object({
-    channel: z.string(),
     id: z.string(),
     snippet: z.string().nullable(),
     snippetAt: z.string().nullable(),
@@ -47,13 +42,12 @@ type ListOutput = z.infer<typeof listOutput>;
 export const threadList: Capability<OriginExecutionContext, ListInput, ListOutput> = {
   async call(ectx, input) {
     const rows = await recentThreads(ectx.principal.id, {
-      channel: input.channel,
       limit: input.limit,
+      scope: input.scope,
     });
 
     return {
       threads: rows.map((r) => ({
-        channel: r.channel,
         id: r.id,
         snippet: r.snippet ? r.snippet.slice(0, 120) : null,
         snippetAt: r.snippetAt?.toISOString() ?? null,
@@ -206,49 +200,3 @@ export const threadSummaryExpand: Capability<OriginExecutionContext, ExpandInput
   outputSchema: expandOutput,
 };
 
-// –
-// Follow up
-// –
-
-const followUpInput = z.object({
-  content: z.string().min(1).describe("Message to post"),
-  threadId: z.string().uuid().describe("Thread to post in"),
-});
-
-type FollowUpInput = z.infer<typeof followUpInput>;
-
-/** Post a message in a thread you're not currently acting in. */
-export const followUp: Capability<OriginExecutionContext, FollowUpInput, void> = {
-  async call(ectx, input) {
-    const meta = await getThreadMeta(input.threadId, ectx.principal.id);
-    assert(meta != null, `Thread not found or not owned: ${input.threadId}`);
-
-    if (meta.channel === "email") {
-      // Email threads require an actual send so the owner sees it in their inbox.
-      const owner = await findOwnerContact(ectx.principal.id);
-      assert(owner?.email != null, "Owner contact email not set");
-      await emailSend.call(ectx, {
-        subject: meta.title ? `Re: ${meta.title}` : "Follow-up",
-        text: input.content,
-        threadId: input.threadId,
-        to: owner.email,
-      });
-    } else {
-      // Chat (and any future in-app channel): write directly to the thread.
-      await insertMessage({
-        content: input.content,
-        principalId: ectx.principal.id,
-        role: "assistant",
-        threadId: input.threadId,
-      });
-    }
-  },
-
-  description:
-    "Post a message in another thread. Use when a thread is waiting " +
-    "for information you now have — not to duplicate what the user already knows.",
-  name: "follow_up",
-
-  inputSchema: followUpInput,
-  outputSchema: z.void(),
-};

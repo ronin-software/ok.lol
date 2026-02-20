@@ -10,20 +10,12 @@
 import { assert } from "@/lib/assert";
 import { toTool, type Capability } from "@ok.lol/capability";
 import type { Tool } from "ai";
-import {
-  contactList,
-  contactLookup,
-  contactLookupOwner,
-  contactRecord,
-  contactSearch,
-} from "../contacts";
 import type { OriginExecutionContext } from "../context";
 import { documentDelete, documentList, documentRead, documentWrite } from "../documents";
-import emailSend from "../email/email.send";
 import httpGet from "../http";
 import { logCall } from "../log";
+import send from "../send";
 import {
-  followUp,
   threadList,
   threadRead,
   threadSearch,
@@ -33,18 +25,12 @@ import * as workers from "./workers";
 
 /** Origin capabilities exposed as tools. */
 const ORIGIN_CAPABILITIES = [
-  contactList,
-  contactLookup,
-  contactLookupOwner,
-  contactRecord,
-  contactSearch,
   documentDelete,
   documentList,
   documentRead,
   documentWrite,
-  emailSend,
-  followUp,
   httpGet,
+  send,
   threadList,
   threadRead,
   threadSearch,

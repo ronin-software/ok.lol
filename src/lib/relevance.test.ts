@@ -89,13 +89,13 @@ describe("filterDocuments", () => {
 
   test("positive-matching documents inject, negative-matching omit", async () => {
     const docs = [
-      doc("tools/email_send", "Email guide", {
+      doc("tools/send.md", "Send guide", {
         embeddings: {
           negative: [vec(0, 1, 0)],
           positive: [vec(1, 0, 0)],
         },
       }),
-      doc("tools/http_get", "HTTP guide", {
+      doc("tools/http_get.md", "HTTP guide", {
         embeddings: {
           negative: [vec(1, 0, 0)],
           positive: [vec(0, 1, 0)],
@@ -107,8 +107,8 @@ describe("filterDocuments", () => {
     const prompt = vec(1, 0, 0);
     const { injected, omitted } = await filterDocuments(docs, prompt);
 
-    expect(injected.map((d) => d.path)).toContain("tools/email_send");
-    expect(omitted.map((d) => d.path)).toContain("tools/http_get");
+    expect(injected.map((d) => d.path)).toContain("tools/send.md");
+    expect(omitted.map((d) => d.path)).toContain("tools/http_get.md");
   });
 });
 

@@ -5,9 +5,8 @@ import { requirePrincipal } from "../auth";
 export default async function ChatPage() {
   const { pal } = await requirePrincipal();
 
-  const threads = await recentThreads(pal.id, { channel: "chat" });
+  const threads = await recentThreads(pal.id);
   const serializedThreads = threads.map((t) => ({
-    channel: t.channel,
     createdAt: t.createdAt.toISOString(),
     id: t.id,
     snippet: t.snippet?.slice(0, 120) ?? null,

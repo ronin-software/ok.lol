@@ -4,8 +4,8 @@
  */
 
 import { db } from "@/db";
-import { seedOwnerContact } from "@/db/contacts";
-import { account, principal } from "@/db/schema";
+import { account, document, principal } from "@/db/schema";
+import { serializeFrontmatter } from "@/lib/frontmatter";
 import { createCustomer, stripe } from "@/lib/stripe";
 import * as tb from "@/lib/tigerbeetle";
 import { eq } from "drizzle-orm";
@@ -63,7 +63,7 @@ export async function upsertAccount(email: string): Promise<string | null> {
 }
 
 /**
- * Idempotently create a principal and seed its owner contact.
+ * Idempotently create a principal and seed the owner contact document.
  *
  * No-op if the principal already exists (onConflictDoNothing).
  * Safe to call from both the webhook and the funded redirect.
@@ -86,7 +86,19 @@ export async function seedPrincipal(
     .from(account)
     .where(eq(account.id, accountId))
     .limit(1);
-  if (acc) await seedOwnerContact(inserted.id, acc.email, acc.name);
+
+  if (acc) {
+    const content = serializeFrontmatter(
+      { emails: [acc.email] },
+      `# ${acc.name ?? "Owner"}\n\nThe account holder.`,
+    );
+    await db.insert(document).values({
+      content,
+      editedBy: "user",
+      path: "contacts/USER.md",
+      principalId: inserted.id,
+    });
+  }
 }
 
 function logError(err: unknown) {

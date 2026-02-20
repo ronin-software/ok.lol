@@ -18,7 +18,7 @@ export { TOOL_NAMES } from "./tools";
 /**
  * Returns documents with missing core/tool paths filled by system defaults.
  *
- * Core paths (soul, identity, user, guide) are always injected when absent.
+ * Core paths (soul.md, identity.md, user.md, guide.md) are always injected when absent.
  * Tool docs are injected only for capabilities in the provided list.
  * Principals override any default by writing to the same path.
  */
@@ -44,7 +44,7 @@ export function withDefaults(
   // Tool docs — one per available capability that has a template.
   if (capabilities) {
     for (const cap of capabilities) {
-      const path = `tools/${cap.name}`;
+      const path = `tools/${cap.name}.md`;
       if (existing.has(path)) continue;
       const template = toolTemplates[cap.name];
       if (!template) continue;

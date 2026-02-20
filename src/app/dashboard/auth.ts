@@ -19,6 +19,7 @@ export async function requireAccount() {
       autoReloadThreshold: account.autoReloadThreshold,
       email: account.email,
       monthlySpendLimit: account.monthlySpendLimit,
+      name: account.name,
       stripeConnectId: account.stripeConnectId,
       stripeCustomerId: account.stripeCustomerId,
     })

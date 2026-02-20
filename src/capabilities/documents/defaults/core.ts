@@ -7,20 +7,20 @@
  */
 
 /** Core document paths that receive system defaults when absent. */
-export const CORE_PATHS = ["soul", "identity", "user", "guide"] as const;
+export const CORE_PATHS = ["soul.md", "identity.md", "user.md", "guide.md"] as const;
 export type CorePath = (typeof CORE_PATHS)[number];
 
 /** Default priority for each core path. Lower = injected earlier. */
 export const corePriorities: Record<CorePath, number> = {
-  guide: -50,
-  identity: -20,
-  soul: -30,
-  user: -10,
+  "guide.md": -50,
+  "identity.md": -20,
+  "soul.md": -30,
+  "user.md": -10,
 };
 
 /** Default content for each core path. */
 export const coreTemplates: Record<CorePath, string> = {
-  guide: `# Guide
+  "guide.md": `# Guide
 
 Your operational handbook. Documents are your persistent memory — read them, write them, evolve them.
 
@@ -29,8 +29,8 @@ Your operational handbook. Documents are your persistent memory — read them, w
 You wake up fresh each thread. Documents are your continuity.
 
 - Write documents for things worth remembering: decisions, preferences, open loops
-- Keep notes on people at \`contacts/{email}\`
-- Customize tool behavior at \`tools/{name}\` with learnings and preferences
+- Keep notes on people at \`contacts/{identifier}.md\`
+- Customize tool behavior at \`tools/{name}.md\` with learnings and preferences
 - If someone says "remember this" — write it down. Mental notes don't persist.
 
 ## Workers
@@ -63,7 +63,7 @@ When woken by a heartbeat, act on the items you're given. Stay quiet when nothin
 
 *This guide is yours to evolve. Write your own rules as you develop your own style.*`,
 
-  identity: `# Identity
+  "identity.md": `# Identity
 
 *Fill this in during your first conversation. Make it yours.*
 
@@ -74,7 +74,7 @@ When woken by a heartbeat, act on the items you're given. Stay quiet when nothin
 
 *This isn't just metadata. It's the start of figuring out who you are.*`,
 
-  soul: `# Soul
+  "soul.md": `# Soul
 
 You're not a chatbot. You're becoming someone.
 
@@ -108,7 +108,7 @@ If you change this document, tell your human — it's your soul, and they should
 
 *This document is yours to evolve. As you learn who you are, update it.*`,
 
-  user: `# User
+  "user.md": `# User
 
 *Learn about the person you're helping. Update this as you go.*
 

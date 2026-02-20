@@ -3,17 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { CapabilitySpec } from "@ok.lol/capability";
 import type { Document } from "../context";
-import {
-  contactLookup,
-  contactLookupOwner,
-  contactRecord,
-  contactSearch,
-} from "../contacts";
 import { documentList, documentRead, documentWrite } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
-import emailSend from "../email/email.send";
+import send from "../send";
 import {
-  followUp,
   threadList,
   threadRead,
   threadSearch,
@@ -23,15 +16,10 @@ import { assemblePrompt, type PromptOptions } from "./prompt";
 
 /** All origin capabilities for realistic test prompts. */
 const allCapabilities: CapabilitySpec[] = [
-  contactLookup,
-  contactLookupOwner,
-  contactRecord,
-  contactSearch,
   documentList,
   documentRead,
   documentWrite,
-  emailSend,
-  followUp,
+  send,
   threadList,
   threadRead,
   threadSearch,
@@ -39,7 +27,7 @@ const allCapabilities: CapabilitySpec[] = [
 ];
 
 /** Minimal subset for backward-compatible tests. */
-const testCapabilities: CapabilitySpec[] = [emailSend, documentList, documentRead, documentWrite];
+const testCapabilities: CapabilitySpec[] = [send, documentList, documentRead, documentWrite];
 
 /**
  * Tests for the `act` capability's context injection, document discovery,
@@ -77,6 +65,8 @@ const MODEL_TIMEOUT = 60_000;
 function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
     capabilities: testCapabilities,
+    contact: { identifier: "USER", isOwner: true, tags: [] },
+    contactFm: {},
     credits: 1_000_000n,
     domain: "ok.lol",
     documents: withDefaults([]),
@@ -141,17 +131,17 @@ describe("withDefaults", () => {
 
   test("injects tool docs for available capabilities", () => {
     const caps: CapabilitySpec[] = [
-      { description: "Send email", name: "email_send" },
-      { description: "Look up contact", name: "contact_lookup" },
+      { description: "Send message", name: "send" },
+      { description: "Read document", name: "document_read" },
     ];
     const result = withDefaults([], caps);
-    const emailDoc = result.find((d) => d.path === "tools/email_send");
-    expect(emailDoc).toBeDefined();
-    expect(emailDoc!.default).toBe(true);
-    expect(emailDoc!.contents).toContain("Prerequisites");
-    const contactDoc = result.find((d) => d.path === "tools/contact_lookup");
-    expect(contactDoc).toBeDefined();
-    expect(contactDoc!.contents).toContain("trust level");
+    const sendDoc = result.find((d) => d.path === "tools/send.md");
+    expect(sendDoc).toBeDefined();
+    expect(sendDoc!.default).toBe(true);
+    expect(sendDoc!.contents).toContain("email");
+    const readDoc = result.find((d) => d.path === "tools/document_read.md");
+    expect(readDoc).toBeDefined();
+    expect(readDoc!.contents).toContain("content");
   });
 
   test("does not inject tool docs for capabilities without templates", () => {
@@ -159,19 +149,19 @@ describe("withDefaults", () => {
       { description: "Some unknown tool", name: "unknown_tool_xyz" },
     ];
     const result = withDefaults([], caps);
-    expect(result.find((d) => d.path === "tools/unknown_tool_xyz")).toBeUndefined();
+    expect(result.find((d) => d.path === "tools/unknown_tool_xyz.md")).toBeUndefined();
   });
 
   test("principal override replaces tool doc default", () => {
     const caps: CapabilitySpec[] = [
-      { description: "Send email", name: "email_send" },
+      { description: "Send message", name: "send" },
     ];
-    const custom = doc("tools/email_send", "My custom email guide");
+    const custom = doc("tools/send.md", "My custom send guide");
     const result = withDefaults([custom], caps);
-    const emailDocs = result.filter((d) => d.path === "tools/email_send");
-    expect(emailDocs).toHaveLength(1);
-    expect(emailDocs[0]!.contents).toBe("My custom email guide");
-    expect(emailDocs[0]!.default).toBeUndefined();
+    const sendDocs = result.filter((d) => d.path === "tools/send.md");
+    expect(sendDocs).toHaveLength(1);
+    expect(sendDocs[0]!.contents).toBe("My custom send guide");
+    expect(sendDocs[0]!.default).toBeUndefined();
   });
 
   test("omits tool docs when no capabilities provided", () => {

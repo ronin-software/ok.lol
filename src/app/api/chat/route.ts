@@ -3,6 +3,7 @@ import { autoTitle, persistOutput } from "@/capabilities/act/persist";
 import { getExecutionContext } from "@/capabilities/context";
 import { summarizeIfNeeded } from "@/capabilities/threads/summarize";
 import { createThread, insertMessage, recentThreads } from "@/db/threads";
+import { env } from "@/lib/env";
 import { verify } from "@/lib/session";
 import type { UIMessage } from "ai";
 import { after } from "next/server";
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   let threadId: string | undefined = body.threadId;
 
   if (!threadId) {
-    threadId = await createThread(ectx.principal.id, "chat");
+    threadId = await createThread(ectx.principal.id);
   }
 
   // Persist the latest user message.
@@ -60,7 +61,11 @@ export async function POST(req: Request) {
   });
 
   after(async () => {
-    const assistantText = await persistOutput(result, capturedThreadId);
+    const assistantText = await persistOutput(result, capturedThreadId, {
+      domain: env.EMAIL_DOMAIN,
+      ownerEmail: ectx.principal.ownerEmail,
+      principalId: ectx.principal.id,
+    });
     await autoTitle(capturedThreadId, capturedUserText, assistantText);
   });
 
@@ -77,7 +82,7 @@ async function buildChatContext(principalId: string): Promise<string | undefined
   if (threads.length === 0) return undefined;
 
   const lines = threads.map(
-    (t) => `- [${t.channel}] ${t.title ?? "(untitled)"}: ${t.snippet?.slice(0, 120) ?? ""}`,
+    (t) => `- ${t.title ?? "(untitled)"}: ${t.snippet?.slice(0, 120) ?? ""}`,
   );
   return `### Recent threads\n${lines.join("\n")}`;
 }

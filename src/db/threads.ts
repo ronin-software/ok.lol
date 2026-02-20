@@ -26,23 +26,22 @@ export function estimateTokens(text: string): number {
 /** Create a thread, returning its ID. */
 export async function createThread(
   principalId: string,
-  channel: "chat" | "email",
   title?: string,
 ): Promise<string> {
   const [row] = await db
     .insert(thread)
-    .values({ channel, principalId, title })
+    .values({ principalId, title })
     .returning({ id: thread.id });
   return row!.id;
 }
 
-/** Channel and title for a thread owned by the given principal. */
+/** Title for a thread owned by the given principal. */
 export async function getThreadMeta(
   threadId: string,
   principalId: string,
-): Promise<{ channel: "chat" | "email"; title: string | null } | null> {
+): Promise<{ title: string | null } | null> {
   const [row] = await db
-    .select({ channel: thread.channel, title: thread.title })
+    .select({ title: thread.title })
     .from(thread)
     .where(and(eq(thread.id, threadId), eq(thread.principalId, principalId)))
     .limit(1);
@@ -71,17 +70,29 @@ export async function deleteThread(threadId: string, principalId: string): Promi
 /** Recent threads for a principal, with the latest message snippet. */
 export async function recentThreads(
   principalId: string,
-  options?: { channel?: "chat" | "email"; limit?: number },
+  options?: { limit?: number; scope?: "mine" | "others" },
 ) {
   const limit = options?.limit ?? 20;
   const conditions = [eq(thread.principalId, principalId)];
-  if (options?.channel) {
-    conditions.push(eq(thread.channel, options.channel));
+
+  // "mine" = has at least one chat message (metadata IS NULL)
+  // "others" = all messages are email (no chat messages)
+  if (options?.scope === "mine") {
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM message m
+      WHERE m.thread_id = ${thread.id}
+        AND m.metadata IS NULL
+        AND m.role IN ('user', 'assistant')
+    )`);
+  } else if (options?.scope === "others") {
+    conditions.push(sql`NOT EXISTS (
+      SELECT 1 FROM message m
+      WHERE m.thread_id = ${thread.id}
+        AND m.metadata IS NULL
+        AND m.role IN ('user', 'assistant')
+    )`);
   }
 
-  // LATERAL subquery: for each thread, grab only its latest non-summary message.
-  // This keeps the message scan scoped to each thread (uses message_thread_created_idx)
-  // rather than materializing a window function over the entire message table.
   const latest = db
     .select({
       content: message.content,
@@ -99,7 +110,6 @@ export async function recentThreads(
 
   const rows = await db
     .select({
-      channel: thread.channel,
       createdAt: thread.createdAt,
       id: thread.id,
       snippet: latest.content,
@@ -305,7 +315,6 @@ export async function threadsForContact(principalId: string, email: string) {
 
   return db
     .select({
-      channel: thread.channel,
       createdAt: thread.createdAt,
       id: thread.id,
       snippet: latest.content,
@@ -332,21 +341,23 @@ export async function findEmailThread(
       .innerJoin(thread, eq(message.threadId, thread.id))
       .where(and(
         eq(thread.principalId, principalId),
-        eq(thread.channel, "email"),
         inArray(sql`${message.metadata}->>'messageId'`, references),
       ))
       .limit(1);
     if (match) return match.threadId;
   }
 
-  // Fallback: match by normalized subject.
+  // Fallback: match by normalized subject on threads that have email messages.
   const [match] = await db
     .select({ id: thread.id })
     .from(thread)
     .where(and(
       eq(thread.principalId, principalId),
-      eq(thread.channel, "email"),
       eq(thread.title, normalizedSubject),
+      sql`EXISTS (
+        SELECT 1 FROM message m
+        WHERE m.thread_id = ${thread.id} AND m.metadata IS NOT NULL
+      )`,
     ))
     .orderBy(desc(thread.createdAt))
     .limit(1);

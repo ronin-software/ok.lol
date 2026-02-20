@@ -12,33 +12,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toolLabels } from "./labels";
 
-// –
-// Notification sound
-// –
-
-let audioCtx: AudioContext | null = null;
-
-/** Two-note ascending chime (D5 → A5) via Web Audio. */
-function playPing() {
-  audioCtx ??= new AudioContext();
-  if (audioCtx.state === "suspended") audioCtx.resume();
-  const t = audioCtx.currentTime;
-  for (const [freq, offset] of [[587, 0], [880, 0.08]] as const) {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.12, t + offset);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.15);
-    osc.start(t + offset);
-    osc.stop(t + offset + 0.15);
-  }
-}
+import { playPing } from "./ping";
 
 type Thread = {
-  channel: string;
   createdAt: string;
   id: string;
   snippet: string | null;
@@ -66,6 +42,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   const [threadId, setThreadId] = useState<string | null>(initialThreadId ?? null);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [scope, setScope] = useState<"mine" | "others" | undefined>(undefined);
   const threadIdRef = useRef<string | null>(null);
   // Ref-backed so the stable transport closure can call the latest handlers.
   const onThreadIdRef = useRef<(id: string) => void>(() => {});
@@ -136,8 +113,9 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadThreads(): Promise<Thread[]> {
-    const res = await fetch("/api/threads?channel=chat");
+  async function loadThreads(s?: "mine" | "others"): Promise<Thread[]> {
+    const qs = s ? `?scope=${s}` : "";
+    const res = await fetch(`/api/threads${qs}`);
     if (!res.ok) return [];
     const list: Thread[] = await res.json();
     setThreads(list);
@@ -155,22 +133,6 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
     setMessages(hydrate(stored) as UIMessage[]);
     setDrawerOpen(false);
   }, [setMessages]);
-
-  // Re-fetch when idle so async agent messages (e.g. email follow-ups) appear.
-  useEffect(() => {
-    if (status !== "ready" || !threadId) return;
-    const id = setInterval(async () => {
-      const res = await fetch(`/api/threads/${threadId}`);
-      if (!res.ok) return;
-      const stored: StoredMessage[] = await res.json();
-      const next = hydrate(stored);
-      if (next.length > messages.length) {
-        setMessages(next as UIMessage[]);
-        playPing();
-      }
-    }, 5_000);
-    return () => clearInterval(id);
-  }, [status, threadId, messages.length, setMessages]);
 
   function newThread() {
     setThreadId(null);
@@ -220,8 +182,24 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
           ? "absolute inset-y-0 left-0 z-20 lg:relative lg:inset-auto lg:z-auto"
           : "hidden lg:flex",
       ].join(" ")}>
-          <div className="flex h-12 items-center justify-between border-b border-zinc-800 px-4">
-            <span className="text-xs font-medium text-zinc-400">Threads</span>
+          <div className="flex h-12 items-center justify-between border-b border-zinc-800 px-3">
+            <div className="flex gap-1">
+              {([undefined, "mine", "others"] as const).map((s) => (
+                <button
+                  key={s ?? "all"}
+                  type="button"
+                  onClick={() => { setScope(s); loadThreads(s); }}
+                  className={[
+                    "rounded px-2 py-1 text-[11px] transition-colors",
+                    scope === s
+                      ? "bg-zinc-800 text-white"
+                      : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300",
+                  ].join(" ")}
+                >
+                  {s === "mine" ? "Mine" : s === "others" ? "Others" : "All"}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={newThread}
@@ -278,7 +256,7 @@ export default function Chat({ initialMessages = [], initialThreadId, initialThr
           <div className="flex shrink-0 items-center gap-3">
             <button
               type="button"
-              onClick={() => { setDrawerOpen(!drawerOpen); if (!drawerOpen) loadThreads(); }}
+              onClick={() => { setDrawerOpen(!drawerOpen); if (!drawerOpen) loadThreads(scope); }}
               className="text-xs text-zinc-500 transition-colors hover:text-white lg:hidden"
             >
               {drawerOpen ? "Close" : "Threads"}

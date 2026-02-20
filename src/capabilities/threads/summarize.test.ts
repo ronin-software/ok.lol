@@ -31,7 +31,7 @@ afterEach(async () => {
 
 describe.skipIf(!HAS_DB)("summarizeIfNeeded — below threshold", () => {
   test("skips when tokens are below threshold", async () => {
-    const threadId = await createThread(principalId, "chat");
+    const threadId = await createThread(principalId);
     await insertMessage({ content: "Short message", role: "user", threadId });
 
     const summarized = await summarizeIfNeeded(threadId);
@@ -45,7 +45,7 @@ describe.skipIf(!HAS_DB)("summarizeIfNeeded — below threshold", () => {
 
 describe.skipIf(!HAS_DB || !HAS_GATEWAY)("summarizeIfNeeded — above threshold", () => {
   test("summarizes when tokens exceed threshold", async () => {
-    const threadId = await createThread(principalId, "chat");
+    const threadId = await createThread(principalId);
 
     // Insert enough messages to exceed 160k tokens.
     // ~4 chars/token, so 640k chars total.

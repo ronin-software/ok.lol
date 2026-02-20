@@ -84,6 +84,8 @@ export default async function act(ectx: OriginExecutionContext, input: Input) {
   const system = assemblePrompt({
     caller: ectx.caller,
     capabilities,
+    contact: ectx.contact,
+    contactFm: ectx.contactFm,
     context: input.context,
     credits: ectx.principal.credits,
     domain: env.EMAIL_DOMAIN,

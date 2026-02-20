@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
  * GET /api/threads
  *
  * Returns recent threads for the authenticated user's principal.
- * Supports optional `channel` query parameter for filtering.
+ * Supports optional `scope` query parameter (mine | others).
  */
 export async function GET(req: Request) {
   const accountId = await verify();
@@ -26,13 +26,12 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const channel = url.searchParams.get("channel") as "chat" | "email" | null;
+  const scope = url.searchParams.get("scope") as "mine" | "others" | null;
   const threads = await recentThreads(pal.id, {
-    channel: channel ?? undefined,
+    scope: scope ?? undefined,
   });
 
   return Response.json(threads.map((t) => ({
-    channel: t.channel,
     createdAt: t.createdAt.toISOString(),
     id: t.id,
     snippet: t.snippet?.slice(0, 120) ?? null,

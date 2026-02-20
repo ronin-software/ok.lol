@@ -57,37 +57,6 @@ export const principal = pgTable("principal", {
 ]);
 
 // –
-// Contact
-// –
-
-/**
- * People the principal knows.
- *
- * The "owner" contact is the account holder — seeded at principal creation
- * from account.email. All other known parties are "contact".
- *
- * Structured identity lives here; narrative notes live in documents at the
- * conventional path `contacts/{email}`, written by the principal as it learns.
- */
-export const contact = pgTable("contact", {
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  /** Address used to reach this person. Nullable until known. */
-  email: text("email"),
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name"),
-  principalId: uuid("principal_id")
-    .references(() => principal.id, { onDelete: "cascade" })
-    .notNull(),
-  /** "owner" = the account holder; "contact" = everyone else. */
-  relationship: text("relationship", { enum: ["owner", "contact"] })
-    .notNull()
-    .default("contact"),
-}, (t) => [
-  index("contact_principal_idx").on(t.principalId),
-  index("contact_principal_email_idx").on(t.principalId, t.email),
-]);
-
-// –
 // Document
 // –
 
@@ -96,7 +65,8 @@ export const contact = pgTable("contact", {
  * The current version of a document is the latest row per (principalId, path).
  * Rollback = insert a new row with old content.
  *
- * Paths are hierarchical: "soul", "identity", "skills/email-handling", etc.
+ * Paths use file extensions: "soul.md", "contacts/USER.md", "tools/send.md".
+ * YAML frontmatter in content carries tags and access control lists.
  */
 export const document = pgTable("document", {
   /** Activation phrases + pre-computed embeddings for relevance filtering. */
@@ -204,12 +174,8 @@ export const hire = pgTable("hire", {
 // Thread
 // –
 
-export const channelEnum = pgEnum("channel", ["chat", "email"]);
-
-
-/** A conversation group. Chat sessions and email threads are both threads. */
+/** A conversation group. Channel is inferred from message metadata. */
 export const thread = pgTable("thread", {
-  channel: channelEnum("channel").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   id: uuid("id").primaryKey().defaultRandom(),
   principalId: uuid("principal_id")
@@ -218,8 +184,7 @@ export const thread = pgTable("thread", {
   /** LLM-generated for chat, email subject for email, user-overridable. */
   title: text("title"),
 }, (t) => [
-  // recentThreads (principalId [+ channel]) and findEmailThread (principalId + channel [+ title]).
-  index("thread_principal_channel_idx").on(t.principalId, t.channel),
+  index("thread_principal_idx").on(t.principalId),
 ]);
 
 // –

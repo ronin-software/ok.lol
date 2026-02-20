@@ -36,6 +36,15 @@ export async function POST(req: Request) {
       await tb.bootstrap();
       await tb.fund(BigInt(accountId), centsToMicro(cents));
 
+      // Populate account name from Stripe if not already set.
+      const customerName = session.customer_details?.name;
+      if (customerName) {
+        await db
+          .update(account)
+          .set({ name: customerName })
+          .where(eq(account.id, accountId));
+      }
+
       const { username, name } = session.metadata ?? {};
       if (username && name) await seedPrincipal(accountId, username, name);
     }

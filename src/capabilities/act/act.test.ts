@@ -5,11 +5,11 @@ import { z } from "zod";
 import type { Document } from "../context";
 import { documentList, documentRead, documentWrite } from "../documents";
 import { CORE_PATHS, withDefaults } from "../documents/defaults";
-import emailSend from "../email/email.send";
+import send from "../send";
 import { assemblePrompt, type PromptOptions } from "./prompt";
 
 /** Capabilities for test prompt assembly. */
-const testCapabilities = [emailSend, documentList, documentRead, documentWrite];
+const testCapabilities = [send, documentList, documentRead, documentWrite];
 
 /**
  * Tests for the `act` capability's context injection, document discovery,
@@ -43,6 +43,8 @@ const MODEL_TIMEOUT = 60_000;
 function options(overrides: Partial<PromptOptions> = {}): PromptOptions {
   return {
     capabilities: testCapabilities,
+    contact: { identifier: "USER", isOwner: true, tags: [] },
+    contactFm: {},
     credits: 1_000_000n,
     domain: "ok.lol",
     documents: withDefaults([]),

@@ -1,4 +1,6 @@
+import { filterDocuments, type InteractionContact } from "@/lib/access";
 import { assert } from "@/lib/assert";
+import { parseFrontmatter, type ContactFrontmatter } from "@/lib/frontmatter";
 import type { CapabilitySpec } from "@ok.lol/capability";
 import type { Document, OriginExecutionContext } from "../context";
 
@@ -28,6 +30,10 @@ export type PromptOptions = {
   caller?: OriginExecutionContext["caller"];
   /** Available capabilities for the directory section. */
   capabilities: CapabilitySpec[];
+  /** Resolved interaction contact for access control. */
+  contact: InteractionContact;
+  /** Parsed frontmatter of the interaction contact. */
+  contactFm: ContactFrontmatter;
   /** Cross-thread awareness from the entry point. Injected as ## Context. */
   context?: string;
   /** Credit balance in micro-USD. */
@@ -55,8 +61,15 @@ export function assemblePrompt(options: PromptOptions): string {
   const budget = options.budget ?? BUDGET_TOTAL;
   assert(budget > 0, "budget must be positive");
 
+  // Filter documents by contact-level access control, then strip frontmatter.
+  const allowed = filterDocuments(options.documents, options.contact, options.contactFm, "context");
+  const stripped = allowed.map((doc) => {
+    const { body } = parseFrontmatter(doc.contents);
+    return { ...doc, contents: body };
+  });
+
   const preamble = buildPreamble(options);
-  const { omitted, section: docs } = buildDocuments(options.documents, budget);
+  const { omitted, section: docs } = buildDocuments(stripped, budget);
   const caps = buildCapabilities(options.capabilities);
   const parts = [preamble, docs];
 

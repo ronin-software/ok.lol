@@ -12,7 +12,7 @@ import BillingCard from "../billing-card";
 import FundedBanner from "../funded-banner";
 import PayoutCard from "../payout-card";
 import { BUTTON_PRIMARY, CARD, INPUT, LABEL } from "../styles";
-import { updatePalName } from "./actions";
+import { updateAccountName, updatePalName } from "./actions";
 
 const PREVIEW = 5;
 
@@ -22,6 +22,7 @@ export default async function MorePage() {
     autoReloadTarget,
     autoReloadThreshold,
     monthlySpendLimit,
+    name: accountName,
     pal,
     stripeConnectId,
     stripeCustomerId,
@@ -62,6 +63,18 @@ export default async function MorePage() {
           <FundedBanner />
         </div>
       )}
+      {/* Account identity */}
+      <div className={CARD}>
+        <p className={LABEL}>Your Name</p>
+        <p className="mt-2 text-sm text-zinc-400">
+          How you&rsquo;re identified in the system. Populated from Stripe if available.
+        </p>
+        <form action={updateAccountName} className="mt-4 flex gap-2">
+          <input name="name" defaultValue={accountName ?? ""} className={INPUT} placeholder="Your name" required />
+          <button type="submit" className={BUTTON_PRIMARY}>Save</button>
+        </form>
+      </div>
+
       {/* Pal identity */}
       <div className={CARD}>
         <p className={LABEL}>Pal Name</p>

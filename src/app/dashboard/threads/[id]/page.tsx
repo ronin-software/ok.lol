@@ -11,7 +11,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
 
   const [t] = await db
-    .select({ channel: thread.channel, id: thread.id, title: thread.title })
+    .select({ id: thread.id, title: thread.title })
     .from(thread)
     .where(and(eq(thread.id, id), eq(thread.principalId, pal.id)))
     .limit(1);
@@ -22,30 +22,23 @@ export default async function ThreadPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      {/* Header */}
       <div className="mb-8">
         <Link
-          href="/dashboard/contacts"
+          href="/dashboard/chat"
           className="mb-4 inline-block text-xs text-zinc-500 transition-colors hover:text-zinc-300"
         >
-          ← Contacts
+          ← Chat
         </Link>
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-lg font-semibold">{t.title ?? "(no subject)"}</h1>
-          <span className="shrink-0 rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
-            {t.channel}
-          </span>
-        </div>
+        <h1 className="text-lg font-semibold">{t.title ?? "(no subject)"}</h1>
       </div>
 
-      {/* Messages */}
       <div className="space-y-4">
         {messages.filter((m) => m.role === "user" || m.role === "assistant").length === 0 ? (
           <p className="text-sm text-zinc-500">No messages.</p>
         ) : (
           messages
             .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => <MessageRow key={m.id} message={m} isEmail={t.channel === "email"} />)
+            .map((m) => <MessageRow key={m.id} message={m} />)
         )}
       </div>
     </div>
@@ -72,9 +65,9 @@ type EmailMeta = {
   to?: string | string[];
 };
 
-function MessageRow({ isEmail, message }: { isEmail: boolean; message: Message }) {
+function MessageRow({ message }: { message: Message }) {
   const isUser = message.role === "user";
-  const meta = isEmail ? (message.metadata as EmailMeta | null) : null;
+  const meta = message.metadata ? (message.metadata as EmailMeta) : null;
   const date = new Date(message.createdAt).toLocaleString();
 
   return (

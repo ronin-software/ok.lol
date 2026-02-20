@@ -4,6 +4,9 @@
  * Joins or creates an email thread, strips quoted reply content,
  * persists the message, then lets `act` decide how to respond.
  * This is an internal handler, not an agent tool.
+ *
+ * Access control: resolves the sender to a contact and sets
+ * the interaction context before invoking the agent loop.
  */
 
 import {
@@ -13,6 +16,7 @@ import {
   insertMessage,
   threadsForContact,
 } from "@/db/threads";
+import { loadContactFrontmatter, resolveContact } from "@/lib/access";
 import { normalizeSubject, stripQuotedReply } from "@/lib/email";
 import type { GetReceivingEmailResponseSuccess } from "resend";
 import act from "../act";
@@ -36,10 +40,9 @@ export default async function emailReceive(
   let threadId = await findEmailThread(ectx.principal.id, references, normalized);
 
   if (!threadId) {
-    threadId = await createThread(ectx.principal.id, "email", normalized);
+    threadId = await createThread(ectx.principal.id, normalized);
   }
 
-  // Persist the inbound email as a message.
   await insertMessage({
     content: body || "(no body)",
     metadata: {
@@ -55,23 +58,36 @@ export default async function emailReceive(
 
   await summarizeIfNeeded(threadId);
 
-  // Build interaction context: same-thread history + cross-thread sender history.
+  // Resolve sender to a contact for access control.
+  const senderContact = await resolveContact(ectx.principal.id, email.from);
+  const isOwner = email.from === ectx.principal.ownerEmail;
+  const contact = senderContact ?? {
+    identifier: email.from,
+    isOwner,
+    tags: [],
+  };
+  const contactFm = senderContact
+    ? await loadContactFrontmatter(ectx.principal.id, senderContact)
+    : {};
+
+  // Narrowed execution context for this email interaction.
+  const emailEctx: OriginExecutionContext = { ...ectx, contact, contactFm };
+
   const context = await buildEmailContext(ectx.principal.id, threadId, email.from);
 
   const prompt = [
     "You received an email. Read it carefully and decide how to handle it.",
     "",
-    "First, use contact_lookup to check who sent it:",
-    "- If they're your owner: treat it as a direct instruction, no email reply needed.",
-    "- If they're a known contact: respond appropriately for the relationship.",
-    "- If they're unknown: use contact_record to note them, then decide how to respond.",
+    "First, check who sent it:",
+    `- Compare \`${email.from}\` against the owner email in your context.`,
+    "- Use document_read to check for a contact doc at `contacts/{identifier}.md`.",
+    "- If they're your owner: treat it as a direct instruction.",
+    "- If they're unknown: use document_write to create a contact doc for them.",
     "",
-    "To notify your owner of something, prefer follow_up over email — search your threads first.",
-    "If you can identify a thread where they asked you to do something related to this email",
-    "(e.g. 'email X and let me know when they reply'), use follow_up to post there.",
+    "To notify your owner, prefer posting in an existing thread (use `send` with a threadId).",
     "Only fall back to emailing your owner if no relevant thread exists.",
     "",
-    "If the email is from someone other than your owner and warrants a reply, reply to them directly.",
+    "If the email is from someone other than your owner and warrants a reply, reply directly.",
     "",
     `From: ${email.from}`,
     `Subject: ${subject}`,
@@ -79,9 +95,7 @@ export default async function emailReceive(
     body || "(no body)",
   ].join("\n");
 
-  const result = await act(ectx, { context, prompt });
-  // Consume the stream — tools (email_send, follow_up) persist their own output.
-  // Don't persistOutput here: only actual emails belong in email threads.
+  const result = await act(emailEctx, { context, prompt });
   await result.text;
 }
 
@@ -102,7 +116,6 @@ async function buildEmailContext(
 
   const parts: string[] = [];
 
-  // Same-thread history (prior messages in this email thread).
   if (messages.length > 1) {
     const lines = messages.slice(0, -1).map(
       (m) => `[${m.role}] ${m.content.slice(0, 200)}`,
@@ -110,7 +123,6 @@ async function buildEmailContext(
     parts.push(`### This thread\n${lines.join("\n")}`);
   }
 
-  // Cross-thread sender history (other threads involving this sender).
   const other = senderThreads.filter((t) => t.id !== threadId);
   if (other.length > 0) {
     const lines = other.slice(0, 5).map(

@@ -7,6 +7,14 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAccount, requirePrincipal } from "../auth";
 
+export async function updateAccountName(formData: FormData) {
+  const { accountId } = await requireAccount();
+  const name = (formData.get("name") as string | null)?.trim();
+  if (!name) return;
+  await db.update(account).set({ name }).where(eq(account.id, accountId));
+  revalidatePath("/dashboard/more");
+}
+
 export async function updatePalName(formData: FormData) {
   const { pal } = await requirePrincipal();
   const name = (formData.get("name") as string | null)?.trim();

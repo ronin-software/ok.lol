@@ -19,7 +19,7 @@ beforeEach(async () => {
   if (!HAS_DB) return;
   await seedAccount();
   principalId = await seedPrincipal();
-  threadId = await createThread(principalId, "chat");
+  threadId = await createThread(principalId);
 });
 
 afterEach(async () => {

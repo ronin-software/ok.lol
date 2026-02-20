@@ -1,7 +1,10 @@
 import { db } from "@/db";
 import { currentDocuments } from "@/db/documents";
-import { hire, listing, principal } from "@/db/schema";
+import { account as accountTable, hire, listing, principal } from "@/db/schema";
+import type { InteractionContact } from "@/lib/access";
+import { OWNER_CONTACT } from "@/lib/access";
 import { assert } from "@/lib/assert";
+import type { ContactFrontmatter } from "@/lib/frontmatter";
 import { secret } from "@/lib/session";
 import { available, lookupAccount } from "@/lib/tigerbeetle";
 import { eq } from "drizzle-orm";
@@ -54,6 +57,10 @@ export type OriginExecutionContext = {
     /** The calling principal's username */
     username: string;
   };
+  /** Resolved identity for access control. Defaults to owner (unrestricted). */
+  contact: InteractionContact;
+  /** Parsed frontmatter from the contact's document. */
+  contactFm: ContactFrontmatter;
   /** The principal executing the capability */
   principal: {
     /** The account the principal belongs to */
@@ -66,6 +73,8 @@ export type OriginExecutionContext = {
     id: string;
     /** Display name */
     name: string;
+    /** Account holder's email address */
+    ownerEmail: string;
     /** The principal's username */
     username: string;
   };
@@ -124,11 +133,13 @@ export async function getExecutionContext(source: Source): Promise<OriginExecuti
     : await db.select().from(principal).where(eq(principal.accountId, accountId!)).limit(1);
   assert(row, principalId ? `Principal not found: ${principalId}` : `No principal for account: ${accountId}`);
 
-  // Resolve documents and credits in parallel.
-  const [docs, tbAccount] = await Promise.all([
+  // Resolve owner email, documents, and credits in parallel.
+  const [ownerRow, docs, tbAccount] = await Promise.all([
+    db.select({ email: accountTable.email }).from(accountTable).where(eq(accountTable.id, row.accountId)).limit(1),
     currentDocuments(row.id),
     lookupAccount(BigInt(row.accountId)),
   ]);
+  const ownerEmail = ownerRow?.[0]?.email ?? "";
   const credits = tbAccount ? available(tbAccount) : 0n;
 
   // Resolve caller if this is a hire execution.
@@ -174,12 +185,15 @@ export async function getExecutionContext(source: Source): Promise<OriginExecuti
 
   return {
     caller,
+    contact: OWNER_CONTACT,
+    contactFm: {},
     principal: {
       accountId: row.accountId,
       credits,
       documents: docs,
       id: row.id,
       name: row.name,
+      ownerEmail,
       username: row.username,
     },
   };

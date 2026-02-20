@@ -5,6 +5,7 @@ import { verify } from "@/lib/session";
 import * as tb from "@/lib/tigerbeetle";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import Notifications from "./notifications";
 import Shell from "./shell";
 
 /** Dashboard shell: sidebar, credits badge, pal switcher. */
@@ -52,6 +53,7 @@ export default async function Layout({
       payoutsEnabled={acct.stripeConnectId != null}
     >
       {children}
+      {pal && <Notifications principalId={pal.id} />}
     </Shell>
   );
 }

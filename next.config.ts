@@ -2,7 +2,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 import { withWorkflow } from "workflow/next";
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  serverExternalPackages: ["rivetkit", "pino", "pino-std-serializers"],
+  transpilePackages: ["@rivetkit/next-js"],
+};
 
 export default withSentryConfig(withWorkflow(nextConfig), {
   // For all available options, see:

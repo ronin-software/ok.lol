@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { contact, document, principal, worker } from "@/db/schema";
+import { document, principal, worker } from "@/db/schema";
 import { embedActivation } from "@/lib/relevance";
 import { verify } from "@/lib/session";
 import { probe } from "@/lib/tunnel";
@@ -138,79 +138,6 @@ export async function deleteDocuments(
 
   revalidatePath("/dashboard/documents", "layout");
   return { count: rows.length };
-}
-
-// –
-// Contacts
-// –
-
-/** Remove a contact. Ownership is verified; owner contacts cannot be deleted. */
-export async function deleteContact(
-  contactId: string,
-): Promise<{ error?: string; ok?: boolean }> {
-  const accountId = await verify();
-  if (!accountId) return { error: "Unauthorized" };
-
-  const [row] = await db
-    .select({ principalId: contact.principalId, relationship: contact.relationship })
-    .from(contact)
-    .where(eq(contact.id, contactId))
-    .limit(1);
-  if (!row) return { error: "Not found" };
-
-  // Verify the contact belongs to this account's pal.
-  const [pal] = await db
-    .select({ id: principal.id })
-    .from(principal)
-    .where(and(eq(principal.id, row.principalId), eq(principal.accountId, accountId)))
-    .limit(1);
-  if (!pal) return { error: "Forbidden" };
-
-  if (row.relationship === "owner") return { error: "Cannot delete owner contact" };
-
-  await db.delete(contact).where(eq(contact.id, contactId));
-  return { ok: true };
-}
-
-/** Add a contact for the current user's pal. */
-export async function createContact(
-  principalId: string,
-  name: string,
-  email: string,
-): Promise<{ error?: string; ok?: boolean }> {
-  const accountId = await verify();
-  if (!accountId) return { error: "Unauthorized" };
-
-  const pal = await db
-    .select({ accountId: principal.accountId })
-    .from(principal)
-    .where(eq(principal.id, principalId))
-    .then((rows) => rows[0]);
-  if (!pal || pal.accountId !== accountId) return { error: "Forbidden" };
-
-  if (!email.trim()) return { error: "Email is required" };
-
-  // Prevent duplicates by email within this principal.
-  const [existing] = await db
-    .select({ id: contact.id })
-    .from(contact)
-    .where(
-      and(
-        eq(contact.principalId, principalId),
-        eq(contact.email, email.trim().toLowerCase()),
-      ),
-    )
-    .limit(1);
-  if (existing) return { error: "Contact already exists" };
-
-  await db.insert(contact).values({
-    email: email.trim().toLowerCase(),
-    name: name.trim() || null,
-    principalId,
-    relationship: "contact",
-  });
-
-  return { ok: true };
 }
 
 // –

@@ -9,11 +9,16 @@
 
 import { db } from "@/db";
 import { thread } from "@/db/schema";
-import { insertMessage, titleThread } from "@/db/threads";
+import { getThreadMeta, insertMessage, titleThread } from "@/db/threads";
 import { assert } from "@/lib/assert";
+import { env } from "@/lib/env";
 import { gateway } from "@/lib/gateway";
+import { notifyPrincipal } from "@/rivet/client";
 import { generateText } from "ai";
+import { Resend } from "resend";
 import { eq } from "drizzle-orm";
+
+const resend = new Resend(env.RESEND_API_KEY);
 
 /** Cheap model for auto-titling. */
 const TITLE_MODEL = "anthropic/claude-3-5-haiku-20241022";
@@ -37,9 +42,20 @@ type AnyStreamResult = {
   text: PromiseLike<string>;
 };
 
+/** Optional notification context for push delivery. */
+type NotifyContext = {
+  /** Domain for building links. */
+  domain?: string;
+  /** Fallback email for when no clients are connected. */
+  ownerEmail?: string;
+  /** Principal ID to notify. */
+  principalId?: string;
+};
+
 export async function persistOutput(
   result: AnyStreamResult,
   threadId: string,
+  notify?: NotifyContext,
 ): Promise<string> {
   assert(threadId.length > 0, "threadId must be non-empty");
 
@@ -81,6 +97,25 @@ export async function persistOutput(
       role: "assistant",
       threadId,
     });
+
+    // Push notification via Rivet; email fallback if nobody's connected.
+    if (notify?.principalId && text.length > 0) {
+      const meta = await getThreadMeta(threadId, notify.principalId);
+      const delivered = await notifyPrincipal(notify.principalId, {
+        content: text.slice(0, 200),
+        threadId,
+        title: meta?.title ?? "(untitled)",
+      });
+
+      if (!delivered && notify.ownerEmail) {
+        await resend.emails.send({
+          from: `ok.lol <noreply@${notify.domain ?? env.EMAIL_DOMAIN}>`,
+          subject: meta?.title ?? "New message",
+          text: `${text.slice(0, 500)}\n\nhttps://${notify.domain ?? env.EMAIL_DOMAIN}/dashboard/chat?thread=${threadId}`,
+          to: notify.ownerEmail,
+        }).catch((err) => console.error("[notify] email fallback failed:", err));
+      }
+    }
   }
 
   return text;
